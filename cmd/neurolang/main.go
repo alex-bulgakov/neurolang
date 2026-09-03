@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.5.0"
+const Version = "0.6.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -80,7 +80,7 @@ func printHelp() {
 	fmt.Printf(`NeuroLang v%s - AI-Native Programming Language & Runtime
 
 Usage:
-  neurolang run <file.nl>     Execute a NeuroLang script (Go host)
+  neurolang run <file.nl>     Execute a NeuroLang script (stack VM)
   neurolang self <file.nl>    Execute via the self-hosted compiler (std/*.nl)
   neurolang eval "<code>"     Evaluate a one-line expression
   neurolang repl              Launch interactive REPL session

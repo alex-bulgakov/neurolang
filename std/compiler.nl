@@ -5,6 +5,7 @@
 L = use "lexer.nl"
 P = use "parser.nl"
 E = use "evaluator.nl"
+K = use "compile.nl"
 
 nl_eval = (code, env) -> {
   if env == null {
@@ -16,4 +17,6 @@ nl_eval = (code, env) -> {
 
 nl_parse = code -> P.parse_program(L.tokenize(code))
 
-{nl_eval: nl_eval, nl_parse: nl_parse}
+nl_compile = ast -> K.compile_program(ast)
+
+{nl_eval: nl_eval, nl_parse: nl_parse, nl_compile: nl_compile}

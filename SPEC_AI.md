@@ -39,7 +39,7 @@ Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module 
 
 ## Builtins
 `len keys values range append slice split join ord chr is_digit is_alpha is_space`
-`int str float copy apply type print json parse_json builtins tool_call load use must is_err`
+`int str float copy apply type print json parse_json builtins tool_call load use must is_err vm_run vm_opcodes`
 
 ## Tools
 `!http.get/post !fs.list/read/write !env.get !time.now/sleep`
@@ -55,10 +55,11 @@ match role { "admin" -> "H", _ -> "L" }
 ```
 
 ## Self-host
-Host Go runtime. Compiler subset lives in `std/{lexer,parser,evaluator,compiler}.nl`.
-`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`.
-Last map in a module file is the export; otherwise all top-level names.
-CLI: `neurolang self file.nl` runs a program through that stack. Parse errors are `{type:"Err", msg, line, col}`.
+Host is a stack VM (bytecode). Compiler subset lives in `std/{lexer,parser,evaluator,compile,compiler}.nl`.
+`C = use "std/compiler"` then `C.nl_eval(code, env)` (tree-walk guest) or `vm_run(C.nl_compile(ast), env)` (bytecode).
+`env=null` => `copy(builtins())`. Last map in a module file is the export; otherwise all top-level names.
+CLI: `neurolang run` executes on the VM. `neurolang self` runs through `std/compiler`. Parse errors are `{type:"Err", msg, line, col}`.
+`!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation
 No `def/function/class/import`. Prefer `| ? @` over loops. Short names. Omit types.

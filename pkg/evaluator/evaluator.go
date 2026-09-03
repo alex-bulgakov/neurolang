@@ -21,8 +21,14 @@ var (
 )
 
 func Eval(node ast.Node, env *object.Environment) object.Object {
+	prev := activeEnv
 	activeEnv = env
-	return evalNode(node, env)
+	defer func() { activeEnv = prev }()
+	ch, err := compile(node)
+	if err != nil {
+		return newError("%s", err.Error())
+	}
+	return run(ch, env)
 }
 
 func evalNode(node ast.Node, env *object.Environment) object.Object {
@@ -915,6 +921,24 @@ func evalToolCall(node *ast.ToolCallExpression, env *object.Environment) object.
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
 	switch function := fn.(type) {
+	case *vmClosure:
+		ex := object.NewEnclosedEnvironment(function.env)
+		if activeEnv != nil {
+			if d := activeEnv.GetDot(); d != nil {
+				ex.SetDot(d)
+			}
+			if ex.File == "" {
+				ex.File = activeEnv.File
+				ex.Dir = activeEnv.Dir
+			}
+		}
+		for i, p := range function.params {
+			if i < len(args) {
+				ex.Set(p, args[i])
+			}
+		}
+		return unwrapReturnValue(run(function.ch, ex))
+
 	case *object.Function:
 		extendedEnv := extendFunctionEnv(function, args)
 		evaluated := Eval(function.Body, extendedEnv)

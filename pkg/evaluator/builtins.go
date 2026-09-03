@@ -517,4 +517,23 @@ func init() {
 			return &object.Map{Pairs: pairs}
 		},
 	}
+
+	builtins["vm_opcodes"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			return opcodeNameMap()
+		},
+	}
+
+	builtins["vm_run"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) < 1 || len(args) > 2 {
+				return newError("vm_run expects (chunk, env?)")
+			}
+			var envObj object.Object = NULL
+			if len(args) == 2 {
+				envObj = args[1]
+			}
+			return vmRun(args[0], envObj)
+		},
+	}
 }

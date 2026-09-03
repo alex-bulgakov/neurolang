@@ -104,6 +104,7 @@ Core builtins:
 | `builtins` | snapshot of the builtin map (seed a guest env) |
 | `tool_call(name, args)` | invoke a registered tool by name |
 | `json parse_json type print load use` | host I/O and modules |
+| `vm_run vm_opcodes` | run a bytecode chunk `{code, consts, names}`; opcode name→int map |
 
 `use "std/lexer"` evaluates the file in a **fresh** environment and returns an export map (the last map value, or all top-level bindings). Paths resolve from CWD, the caller module directory, and the repo root (`go.mod`). `load("f.nl")` still injects bindings into the current env.
 
@@ -112,16 +113,19 @@ Tools (effects): `http.get` `http.post` `fs.list` `fs.read` `fs.write` `env.get`
 ## 6. Self-hosting bootstrap
 
 ```
-Go host  --use-->  std/compiler.nl
-                      |-- use lexer.nl
-                      |-- use parser.nl
-                      |-- use evaluator.nl
-                          |
-                          v
-                 C.nl_eval / C.nl_parse
+Go host (stack VM)  --use-->  std/compiler.nl
+                                 |-- use lexer.nl
+                                 |-- use parser.nl
+                                 |-- use evaluator.nl
+                                 |-- use compile.nl
+                                     |
+                                     v
+                    C.nl_eval / C.nl_parse / C.nl_compile
 ```
 
-`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Closures are maps `{__fn, params, body, env, dot}` and control-flow is `{__sig, val}`.
+`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Closures in the guest evaluator are maps `{__fn, params, body, env, dot}`; bytecode closures are `{__bc, code, consts, names, params}`.
+
+`neurolang run` / `eval` / `repl` compile Go AST to bytecode and execute on the VM. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 

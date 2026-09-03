@@ -410,6 +410,28 @@ par_ok = len(par_ast.statements) > 0 && par_ast.statements[0].type != "Err"
 	}
 }
 
+func TestNLCompileVMRun(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	evaluated := testEval(`
+C = use "std/compiler"
+bc = C.nl_compile(C.nl_parse("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc"))
+vm_run(bc, copy(builtins()))
+`)
+	if isError(evaluated) {
+		t.Fatalf("nl_compile/vm_run failed: %s", evaluated.Inspect())
+	}
+	testIntegerObject(t, evaluated, 6)
+}
+
 func TestListConcatAndSlice(t *testing.T) {
 	input := `
 a = [1, 2]
