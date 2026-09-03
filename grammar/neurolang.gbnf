@@ -1,0 +1,63 @@
+# Neurolang GBNF (llama.cpp / outlines constrained decoding)
+# Subset covering the AI-native core. Keep this in lockstep with SPEC_AI.md.
+
+root ::= program
+
+program ::= (statement)*
+
+statement ::=
+    return-stmt
+  | while-stmt
+  | for-stmt
+  | "break" ws
+  | "continue" ws
+  | assign-stmt
+  | expr ws
+
+return-stmt ::= "return" ws (expr)?
+while-stmt ::= "while" ws expr ws block
+for-stmt ::= "for" ws ident ws "in" ws expr ws block
+assign-stmt ::= lvalue ws "=" ws expr
+lvalue ::= ident (("." ident) | ("[" expr "]"))*
+
+block ::= "{" ws (statement)* "}" ws
+
+expr ::= pipe
+
+pipe ::= or (ws "|" ws pipe-rhs)*
+pipe-rhs ::= ("?" expr) | ("@" expr) | ("&" expr) | postfix
+
+or ::= and (ws "||" ws and)*
+and ::= cmp (ws "&&" ws cmp)*
+cmp ::= sum (ws cmp-op ws sum)*
+cmp-op ::= "==" | "!=" | "<=" | ">=" | "<" | ">" | "in"
+sum ::= prod (ws [+\-] ws prod)*
+prod ::= prefix (ws [*/%] ws prefix)*
+prefix ::= [\-!] prefix | postfix
+postfix ::= atom (call | index | dot)*
+call ::= "(" ws args? ")"
+index ::= "[" expr "]"
+dot ::= "." ident
+
+atom ::=
+    number | string | "true" | "false" | "null"
+  | ident (ws "->" ws expr)?
+  | list | map-or-block
+  | if-expr | match-expr | context-dot | tool | grouped
+
+grouped ::= "(" ws (ident (ws "," ws ident)* ")" ws "->" ws expr | expr ")")
+list ::= "[" ws args? "]"
+map-or-block ::= "{" ws (map-pairs | (statement)*) "}"
+map-pairs ::= (ident | string) ws ":" ws expr (ws "," ws (ident | string) ws ":" ws expr)* ws ","?
+if-expr ::= "if" ws expr ws block (ws "else" ws (if-expr | block))?
+match-expr ::= "match" ws expr ws "{" ws (pattern ws "->" ws expr ws ","? ws)* "}"
+pattern ::= ident | number | string | "true" | "false" | "null"
+context-dot ::= "." ident?
+tool ::= "!" ident ("." ident)* ("(" ws args? ")")?
+
+args ::= expr (ws "," ws expr)*
+ident ::= [A-Za-z_$] [A-Za-z0-9_]*
+number ::= [0-9]+ ("." [0-9]+)?
+string ::= "\"" ([^"\\] | "\\" ["\\ntr])* "\""
+ws ::= ([ \t\n\r] | comment)*
+comment ::= "#" [^\n]* | "//" [^\n]*

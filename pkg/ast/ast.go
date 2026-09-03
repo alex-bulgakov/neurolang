@@ -45,15 +45,22 @@ func (p *Program) String() string {
 // Statements
 
 type AssignStatement struct {
-	Token token.Token // IDENT token
-	Name  *Identifier
-	Value Expression
+	Token  token.Token // '=' token
+	Name   *Identifier // for backward compatibility when Target is *Identifier
+	Target Expression  // Identifier, PropertyExpression, or IndexExpression
+	Value  Expression
 }
 
 func (as *AssignStatement) statementNode()       {}
 func (as *AssignStatement) TokenLiteral() string { return as.Token.Literal }
 func (as *AssignStatement) String() string {
-	return fmt.Sprintf("%s = %s", as.Name.String(), as.Value.String())
+	targetStr := ""
+	if as.Target != nil {
+		targetStr = as.Target.String()
+	} else if as.Name != nil {
+		targetStr = as.Name.String()
+	}
+	return fmt.Sprintf("%s = %s", targetStr, as.Value.String())
 }
 
 type ExpressionStatement struct {
@@ -112,6 +119,19 @@ func (ws *WhileStatement) statementNode()       {}
 func (ws *WhileStatement) TokenLiteral() string { return ws.Token.Literal }
 func (ws *WhileStatement) String() string {
 	return "while " + ws.Condition.String() + " " + ws.Body.String()
+}
+
+type ForStatement struct {
+	Token    token.Token // 'for'
+	Name     *Identifier
+	Iterable Expression
+	Body     *BlockStatement
+}
+
+func (fs *ForStatement) statementNode()       {}
+func (fs *ForStatement) TokenLiteral() string { return fs.Token.Literal }
+func (fs *ForStatement) String() string {
+	return "for " + fs.Name.String() + " in " + fs.Iterable.String() + " " + fs.Body.String()
 }
 
 type BreakStatement struct {

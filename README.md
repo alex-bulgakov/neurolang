@@ -14,6 +14,7 @@
 * **Потоковая обработка первого класса (`|`)**: программы строятся как конвейеры трансформации данных.
 * **Нативная поддержка инструментов (MCP/Agent-native)** через оператор `!tool.name(...)`.
 * **Автономность**: написан на чистом Go, компилируется в единый бинарник `neurolang.exe` без внешних зависимостей.
+* **Самохостинг**: лексер, парсер и вычислитель уже написаны на NeuroLang (`std/*.nl`). Хост на Go загружает их и выполняет гостевые программы через `nl_eval`.
 
 ---
 
@@ -29,6 +30,8 @@
 | `!` | **Effect / Tool** | Вызов внешнего инструмента / MCP | `!http.get(url)` | `requests.get(url).json()` |
 | `->` | **Arrow** | Лямбда / стрелочная функция | `x -> x * 2` | `lambda x: x * 2` |
 | `match` | **Match** | Сопоставление с образцом | `match x { 0 -> "zero", _ -> "any" }` | `match / if-elif` |
+| `for x in xs` | **For-in** | Итерация списка / символов / ключей | `for n in nums { acc = acc + n }` | `for n in nums:` |
+| `in` | **Member** | Вхождение в список, ключ карты, подстрока | `3 in xs`, `"k" in m` | `x in xs` |
 
 ### Сравнение на типовой задаче агента:
 > *Задача: отфильтровать активные заказы, применить налог 20% и оставить заказы с суммой > 100.*
@@ -80,16 +83,22 @@ go build -o neurolang.exe ./cmd/neurolang
 
 ### Команды CLI
 ```bash
-# 1. Запуск скрипта
+# 1. Запуск скрипта (Go-хост)
 ./neurolang run examples/01_basics.nl
 
-# 2. Вычисление однострочника в терминале
+# 2. Тот же скрипт через self-hosted компилятор (std/*.nl)
+./neurolang self examples/06_self_host.nl
+
+# 3. Вычисление однострочника в терминале
 ./neurolang eval "[1, 2, 3, 4, 5] | ?(. > 2) | @(. * 10)"
 
-# 3. Интерактивный REPL
+# 4. Интерактивный REPL
 ./neurolang repl
 
-# 4. Анализ расхода токенов BPE и сравнение с Python
+# 5. Плотная спецификация для LLM (класть в system prompt)
+./neurolang spec
+
+# 6. Анализ расхода токенов BPE и сравнение с Python
 ./neurolang stats examples/04_token_comparison.nl examples/04_comparison.py
 ```
 
@@ -118,6 +127,10 @@ neurolang/
 │   ├── token/                 # Определения токенов
 │   ├── tokenmetrics/          # BPE-счётчик токенов и метрики экономии контекста
 │   └── tools/                 # Реестр внешних инструментов и эффектов (MCP/HTTP/FS)
+├── std/                       # Self-hosted compiler (lexer/parser/eval на NL)
+├── grammar/neurolang.gbnf     # GBNF для constrained decoding
+├── SPEC_AI.md                 # Плотная спецификация для моделей
+├── SPEC.md                    # Полная спецификация языка
 ├── examples/                  # Примеры программ
 └── README.md
 ```

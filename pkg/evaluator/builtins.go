@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"neurolang/pkg/object"
+	"neurolang/pkg/tools"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -169,7 +171,11 @@ var builtins = map[string]*object.Builtin{
 			}
 			parts := make([]string, len(list.Elements))
 			for i, el := range list.Elements {
-				parts[i] = el.Inspect()
+				if s, ok := el.(*object.String); ok {
+					parts[i] = s.Value
+				} else {
+					parts[i] = el.Inspect()
+				}
 			}
 			return &object.String{Value: strings.Join(parts, sep.Value)}
 		},
@@ -348,4 +354,129 @@ var builtins = map[string]*object.Builtin{
 			return &object.Boolean{Value: r == ' ' || r == '\t' || r == '\n' || r == '\r'}
 		},
 	},
+}
+
+func init() {
+	builtins["int"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("int expects 1 argument")
+			}
+			switch arg := args[0].(type) {
+			case *object.Integer:
+				return arg
+			case *object.Float:
+				return &object.Integer{Value: int64(arg.Value)}
+			case *object.Boolean:
+				if arg.Value {
+					return &object.Integer{Value: 1}
+				}
+				return &object.Integer{Value: 0}
+			case *object.String:
+				n, err := strconv.ParseInt(strings.TrimSpace(arg.Value), 10, 64)
+				if err != nil {
+					return newError("int: cannot parse %q", arg.Value)
+				}
+				return &object.Integer{Value: n}
+			default:
+				return newError("int: cannot convert %s", args[0].Type())
+			}
+		},
+	}
+
+	builtins["float"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("float expects 1 argument")
+			}
+			switch arg := args[0].(type) {
+			case *object.Float:
+				return arg
+			case *object.Integer:
+				return &object.Float{Value: float64(arg.Value)}
+			case *object.String:
+				n, err := strconv.ParseFloat(strings.TrimSpace(arg.Value), 64)
+				if err != nil {
+					return newError("float: cannot parse %q", arg.Value)
+				}
+				return &object.Float{Value: n}
+			default:
+				return newError("float: cannot convert %s", args[0].Type())
+			}
+		},
+	}
+
+	builtins["str"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("str expects 1 argument")
+			}
+			if s, ok := args[0].(*object.String); ok {
+				return s
+			}
+			return &object.String{Value: args[0].Inspect()}
+		},
+	}
+
+	builtins["copy"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("copy expects 1 argument")
+			}
+			switch arg := args[0].(type) {
+			case *object.Map:
+				pairs := make(map[string]object.Object, len(arg.Pairs))
+				for k, v := range arg.Pairs {
+					pairs[k] = v
+				}
+				return &object.Map{Pairs: pairs}
+			case *object.List:
+				els := make([]object.Object, len(arg.Elements))
+				copy(els, arg.Elements)
+				return &object.List{Elements: els}
+			default:
+				return arg
+			}
+		},
+	}
+
+	builtins["apply"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 2 {
+				return newError("apply expects (fn, args_list)")
+			}
+			list, ok := args[1].(*object.List)
+			if !ok {
+				return newError("apply: second argument must be LIST")
+			}
+			return applyFunction(args[0], list.Elements)
+		},
+	}
+
+	builtins["tool_call"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 2 {
+				return newError("tool_call expects (name, args_list)")
+			}
+			name := args[0].Inspect()
+			if s, ok := args[0].(*object.String); ok {
+				name = s.Value
+			}
+			list, ok := args[1].(*object.List)
+			if !ok {
+				return newError("tool_call: second argument must be LIST")
+			}
+			return tools.Call(name, list.Elements, nil)
+		},
+	}
+
+	builtins["builtins"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			pairs := make(map[string]object.Object, len(builtins))
+			for k, v := range builtins {
+				pairs[k] = v
+			}
+			return &object.Map{Pairs: pairs}
+		},
+	}
 }

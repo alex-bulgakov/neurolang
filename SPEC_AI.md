@@ -1,65 +1,63 @@
-# NeuroLang Specification for AI Models (Dense Spec)
+# NeuroLang Spec for Models
 
-<!-- Token Footprint: ~380 BPE tokens. Inject into LLM system prompt as context primer. -->
+<!-- Inject as system primer. Dense by design: combinators over keywords. -->
 
-## 1. Syntax & Core Grammar (EBNF)
-```ebnf
-Program    ::= Statement*
-Statement  ::= Assign | Return | While | Expr
-Assign     ::= IDENT "=" Expr
-While      ::= "while" Expr Block
-Block      ::= "{" Statement* "}"
-
-Expr       ::= PipeExpr
-PipeExpr   ::= LogicExpr ("|" (Filter | Map | Reduce | Call | IDENT))*
-Filter     ::= "?" Expr
-Map        ::= "@" Expr
-Reduce     ::= "&" Expr
-ToolCall   ::= "!" IDENT ("." IDENT)* ("(" (Expr ("," Expr)*)? ")")?
-
-LogicExpr  ::= CompExpr (("&&" | "||") CompExpr)*
-CompExpr   ::= MathExpr (("==" | "!=" | "<" | "<=" | ">" | ">=") MathExpr)*
-MathExpr   ::= Term (("+" | "-") Term)*
-Term       ::= Factor (("*" | "/" | "%") Factor)*
-Factor     ::= ("-" | "!")? Primary
-Primary    ::= INT | FLOAT | STRING | BOOL | "null" | List | MapLit | Lambda | Match | Dot | "(" Expr ")"
-
-Dot        ::= "." IDENT?
-Lambda     ::= ("(" IDENT ("," IDENT)* ")" | IDENT) "->" Expr
-Match      ::= "match" Expr "{" (Pattern "->" Expr ("," | ";")?)* "}"
-List       ::= "[" (Expr ("," Expr)*)? "]"
-MapLit     ::= "{" (Key ":" Expr ("," Key ":" Expr)*)? "}"
-Key        ::= IDENT | STRING
+## Grammar
+```
+P = S*
+S = "return" E? | "while" E B | "for" ID "in" E B | "break" | "continue" | L "=" E | E
+B = "{" S* "}"
+E = Pipe
+Pipe = Or ("|" ( "?" E | "@" E | "&" E | Call | ID ))*
+Or = And ("||" And)*
+And = In ("&&" In)*
+In = Cmp ("in" Cmp)*
+Cmp = Sum (("=="|"!="|"<"|"<="|">"|">=") Sum)*
+Sum = Prod (("+"|"-") Prod)*
+Prod = Pref (("*"|"/"|"%") Pref)*
+Pref = ("-"|"!") Pref | Post
+Post = Atom (("(" Args ")" | "[" E "]" | "." ID))*
+Atom = NUM | STR | true | false | null | ID | List | Map | Lambda | "if" E B ("else" (B|"if"...))? | "match" E "{" (Pat "->" E)* "}" | "." ID? | "(" E ")" | "!" ID("." ID)* ("(" Args ")")?
+Lambda = ID "->" E | "(" ID* ")" "->" E
+List = "[" Args "]"
+Map = "{" (ID|STR) ":" E ("," (ID|STR) ":" E)* "}"
 ```
 
-## 2. Semantics of Combinators
-- `|` (Pipe): Streams output of left into right. `data | f` == `f(data)`.
-- `.` (Dot): The implicit current item inside stream operations.
-  - Solitary `.`: Current item itself.
-  - `.field`: Field access on current item (`item["field"]`).
-- `?(condition)`: Stream filter. Retains items where condition with `.` is truthy.
-- `@(transform)`: Stream map. Transforms each item using `.` or expression.
-- `&(reducer)`: Stream fold/reduce using `(acc, item) -> ...`.
-- `!tool.name(args)`: Side effect / external tool / MCP call.
+Blocks `{S*}` are expressions (value = last S). Map vs block: `{k:v}` if first pair uses `:`, else block.
 
-## 3. Built-in Primitives
-- **Collections**: `len(x)`, `keys(m)`, `values(m)`, `range(start, end)`, `append(list, elem)`, `slice(seq, start, end)`
-- **Strings/Bytes**: `ord(char)`, `chr(int)`, `is_digit(char)`, `is_alpha(char)`, `is_space(char)`, `split(str, sep)`, `join(list, sep)`
-- **Serialization**: `json(obj)`, `parse_json(str)`
-- **Modules**: `load("file.nl")` (executes file in current environment)
-- **Effects**: `!fs.read(path)`, `!fs.write(path, data)`, `!fs.list(path)`, `!http.get(url)`, `!http.post(url, body)`, `!time.now()`, `!time.sleep(ms)`
+## Combinators (1 glyph = 1 op)
+- `|` pipe: `x|f` == `f(x)`. Into `f(y)` becomes `f(x,y)`.
+- `.` current item in `| ? @ for`. `.field` reads field. Bare `.` is the item.
+- `?(pred)` filter. `@(expr)` map. `&(fn)` reduce. `!(tool)(...)` effect/MCP.
+- `->` lambda. `in` membership (list/map-key/substring).
+- `for x in xs { ... }` iterates list, string chars, or map keys. Sets `.`.
 
-## 4. Canonical Patterns
-```nl
-# Filter & Map:
-active_names = users | ?(.is_active && .age >= 18) | @.name
+## Eval
+Dynamic types: int float bool str null list map fn. `==` deep. `&&` `||` short-circuit.
+Assign mutates ident / `obj.field` / `obj[k]`. `load("f.nl")` execs into current env.
 
-# Object Projection:
-summaries = orders | @{id: .id, total: .qty * .price}
+## Builtins
+`len keys values range append slice split join ord chr is_digit is_alpha is_space`
+`int str float copy apply type print json parse_json builtins tool_call load`
 
-# Sum / Aggregation:
-total = [10, 20, 30] | &((a, b) -> a + b)
+## Tools
+`!http.get/post !fs.list/read/write !env.get !time.now/sleep`
 
-# Tool Pipelines:
-logs = "app.log" | !fs.read | split("\n") | ?(. != "")
+## Patterns
 ```
+users | ?(.active && .age >= 18) | @.name
+orders | @{id:.id, total:.qty*.price} | ?(.total > 100)
+xs | &((a,b) -> a+b)
+for ch in src { if is_digit(ch) { n = n*10 + (ord(ch)-48) } }
+!fs.read("x.json") | @.items | ?(.ok)
+match role { "admin" -> "H", _ -> "L" }
+```
+
+## Self-host
+Host Go runtime. Compiler subset lives in `std/{lexer,parser,evaluator,compiler}.nl`.
+`nl_eval(code, env)` tokenizes+parses+evals. `env=null` => `copy(builtins())`.
+CLI: `neurolang self file.nl` runs a program through that stack.
+
+## Style for generation
+No `def/function/class/import`. Prefer `| ? @` over loops. Short names. Omit types.
+One statement per line. Parenthesize combinator predicates: `?(.x > 1)`.

@@ -8,6 +8,7 @@ import (
 	"neurolang/pkg/parser"
 	"neurolang/pkg/tools"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -38,6 +39,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.WhileStatement:
 		return evalWhileStatement(node, env)
 
+	case *ast.ForStatement:
+		return evalForStatement(node, env)
+
 	case *ast.BreakStatement:
 		return &object.BreakSignal{}
 
@@ -49,7 +53,52 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		if isError(val) {
 			return val
 		}
-		env.Set(node.Name.Value, val)
+		target := node.Target
+		if target == nil && node.Name != nil {
+			target = node.Name
+		}
+		switch t := target.(type) {
+		case *ast.Identifier:
+			env.Set(t.Value, val)
+		case *ast.PropertyExpression:
+			obj := Eval(t.Left, env)
+			if isError(obj) {
+				return obj
+			}
+			if m, ok := obj.(*object.Map); ok {
+				m.Pairs[t.Property] = val
+			} else {
+				return newError("cannot set property %s on %s", t.Property, obj.Type())
+			}
+		case *ast.IndexExpression:
+			obj := Eval(t.Left, env)
+			if isError(obj) {
+				return obj
+			}
+			idx := Eval(t.Index, env)
+			if isError(idx) {
+				return idx
+			}
+			if m, ok := obj.(*object.Map); ok {
+				keyStr := idx.Inspect()
+				if s, ok := idx.(*object.String); ok {
+					keyStr = s.Value
+				}
+				m.Pairs[keyStr] = val
+			} else if list, ok := obj.(*object.List); ok {
+				if i, ok := idx.(*object.Integer); ok && i.Value >= 0 && i.Value < int64(len(list.Elements)) {
+					list.Elements[i.Value] = val
+				} else {
+					return newError("index out of range: %s", idx.Inspect())
+				}
+			} else {
+				return newError("cannot index assign on %s", obj.Type())
+			}
+		default:
+			if node.Name != nil {
+				env.Set(node.Name.Value, val)
+			}
+		}
 		return val
 
 	// Literals
@@ -108,6 +157,35 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
+		if node.Operator == "&&" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if !isTruthy(left) {
+				return FALSE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
+		}
+		if node.Operator == "||" {
+			left := Eval(node.Left, env)
+			if isError(left) {
+				return left
+			}
+			if isTruthy(left) {
+				return TRUE
+			}
+			right := Eval(node.Right, env)
+			if isError(right) {
+				return right
+			}
+			return nativeBoolToBooleanObject(isTruthy(right))
+		}
+
 		left := Eval(node.Left, env)
 		if isError(left) {
 			return left
@@ -262,6 +340,63 @@ func evalWhileStatement(ws *ast.WhileStatement, env *object.Environment) object.
 	return NULL
 }
 
+func evalForStatement(fs *ast.ForStatement, env *object.Environment) object.Object {
+	iterable := Eval(fs.Iterable, env)
+	if isError(iterable) {
+		return iterable
+	}
+
+	items, err := collectIterable(iterable)
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		env.Set(fs.Name.Value, item)
+		env.SetDot(item)
+		res := Eval(fs.Body, env)
+		if res != nil {
+			switch res.Type() {
+			case object.BREAK_SIGNAL_OBJ:
+				return NULL
+			case object.CONTINUE_SIGNAL_OBJ:
+				continue
+			case object.RETURN_VALUE_OBJ, object.ERROR_OBJ:
+				return res
+			}
+		}
+	}
+
+	return NULL
+}
+
+func collectIterable(iterable object.Object) ([]object.Object, *object.Error) {
+	switch it := iterable.(type) {
+	case *object.List:
+		return it.Elements, nil
+	case *object.String:
+		runes := []rune(it.Value)
+		items := make([]object.Object, len(runes))
+		for i, r := range runes {
+			items[i] = &object.String{Value: string(r)}
+		}
+		return items, nil
+	case *object.Map:
+		keys := make([]string, 0, len(it.Pairs))
+		for k := range it.Pairs {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		items := make([]object.Object, len(keys))
+		for i, k := range keys {
+			items[i] = &object.String{Value: k}
+		}
+		return items, nil
+	default:
+		return nil, newError("cannot iterate over %s", iterable.Type())
+	}
+}
+
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
 	if val, ok := env.Get(node.Value); ok {
 		return val
@@ -338,12 +473,8 @@ func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 }
 
 func evalInfixExpression(operator string, left, right object.Object) object.Object {
-	// Logical AND / OR
-	if operator == "&&" {
-		return nativeBoolToBooleanObject(isTruthy(left) && isTruthy(right))
-	}
-	if operator == "||" {
-		return nativeBoolToBooleanObject(isTruthy(left) || isTruthy(right))
+	if operator == "in" {
+		return evalInOperator(left, right)
 	}
 
 	// Equality check for any types
@@ -385,6 +516,33 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 	}
 
 	return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())
+}
+
+func evalInOperator(left, right object.Object) object.Object {
+	switch r := right.(type) {
+	case *object.List:
+		for _, el := range r.Elements {
+			if areEqual(left, el) {
+				return TRUE
+			}
+		}
+		return FALSE
+	case *object.Map:
+		key := left.Inspect()
+		if s, ok := left.(*object.String); ok {
+			key = s.Value
+		}
+		_, exists := r.Pairs[key]
+		return nativeBoolToBooleanObject(exists)
+	case *object.String:
+		l, ok := left.(*object.String)
+		if !ok {
+			return newError("in: left operand must be STRING when searching a STRING")
+		}
+		return nativeBoolToBooleanObject(strings.Contains(r.Value, l.Value))
+	default:
+		return newError("in: cannot search in %s", right.Type())
+	}
 }
 
 func evalNumericInfixExpression(operator string, left, right object.Object) object.Object {
@@ -817,6 +975,29 @@ func areEqual(a, b object.Object) bool {
 	case *object.String:
 		return a.Value == b.(*object.String).Value
 	case *object.Null:
+		return true
+	case *object.List:
+		bList := b.(*object.List)
+		if len(a.Elements) != len(bList.Elements) {
+			return false
+		}
+		for i := range a.Elements {
+			if !areEqual(a.Elements[i], bList.Elements[i]) {
+				return false
+			}
+		}
+		return true
+	case *object.Map:
+		bMap := b.(*object.Map)
+		if len(a.Pairs) != len(bMap.Pairs) {
+			return false
+		}
+		for k, vA := range a.Pairs {
+			vB, ok := bMap.Pairs[k]
+			if !ok || !areEqual(vA, vB) {
+				return false
+			}
+		}
 		return true
 	}
 	return false

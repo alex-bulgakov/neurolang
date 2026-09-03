@@ -4,6 +4,8 @@ import (
 	"neurolang/pkg/lexer"
 	"neurolang/pkg/object"
 	"neurolang/pkg/parser"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -149,6 +151,24 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
 	return true
 }
 
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found")
+		}
+		dir = parent
+	}
+}
+
 func TestWhileLoop(t *testing.T) {
 	input := `
 i = 0
@@ -169,6 +189,132 @@ total
 	// i will be 1, 2, 3, 4, (skips 5), 6, 7, 8 (breaks at 9)
 	// total = 1 + 2 + 3 + 4 + 6 + 7 + 8 = 31
 	testIntegerObject(t, evaluated, 31)
+}
+
+func TestForInAndMembership(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			`
+acc = 0
+for n in [1, 2, 3, 4] {
+  acc = acc + n
+}
+acc
+`,
+			"10",
+		},
+		{
+			`
+s = ""
+for ch in "ab" {
+  s = s + ch
+}
+s
+`,
+			`"ab"`,
+		},
+		{
+			`3 in [1, 2, 3]`,
+			"true",
+		},
+		{
+			`"name" in {name: "Ada", role: "agent"}`,
+			"true",
+		},
+		{
+			`"bc" in "abcd"`,
+			"true",
+		},
+		{
+			`9 in [1, 2, 3]`,
+			"false",
+		},
+	}
+
+	for _, tt := range tests {
+		evaluated := testEval(tt.input)
+		if evaluated == nil {
+			t.Fatalf("evaluated nil for input %s", tt.input)
+		}
+		if evaluated.Inspect() != tt.expected {
+			t.Errorf("wrong result for input:\n%s\nexpected=%s, got=%s",
+				tt.input, tt.expected, evaluated.Inspect())
+		}
+	}
+}
+
+func TestPropertyAssignment(t *testing.T) {
+	input := `
+obj = {count: 1}
+obj.count = obj.count + 4
+obj["tag"] = "ok"
+obj.count + len(obj)
+`
+	evaluated := testEval(input)
+	testIntegerObject(t, evaluated, 7)
+}
+
+func TestShortCircuitLogic(t *testing.T) {
+	if v := testEval(`false && (1 / 0)`); v.Inspect() != "false" {
+		t.Fatalf("expected false from short-circuit &&, got %s", v.Inspect())
+	}
+	if v := testEval(`true || (1 / 0)`); v.Inspect() != "true" {
+		t.Fatalf("expected true from short-circuit ||, got %s", v.Inspect())
+	}
+}
+
+func TestApplyCopyAndConversions(t *testing.T) {
+	input := `
+add = (a, b) -> a + b
+n = apply(add, [10, 5])
+s = str(n) + "x"
+i = int("42")
+src = {a: 1}
+dup = copy(src)
+dup.a = 9
+[n, s, i, src.a, dup.a]
+`
+	evaluated := testEval(input)
+	if evaluated.Inspect() != `[15, "15x", 42, 1, 9]` {
+		t.Fatalf("unexpected result: %s", evaluated.Inspect())
+	}
+}
+
+func TestMetaCircularSelfHost(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	input := `
+load("std/lexer.nl")
+load("std/parser.nl")
+load("std/evaluator.nl")
+load("std/compiler.nl")
+
+a = nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null)
+b = nl_eval("square = n -> n * n\nsquare(8)", null)
+c = nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null)
+d = nl_eval("user = {name: \"Ada\", active: true}\nif user.active { user.name } else { \"no\" }", null)
+[a, b, c, d]
+`
+	evaluated := testEval(input)
+	if isError(evaluated) {
+		t.Fatalf("meta-circular eval error: %s", evaluated.Inspect())
+	}
+	got := evaluated.Inspect()
+	want := `[[40, 60, 80], 64, 6, "Ada"]`
+	if got != want {
+		t.Fatalf("meta-circular mismatch:\nwant %s\ngot  %s", want, got)
+	}
 }
 
 func TestListConcatAndSlice(t *testing.T) {

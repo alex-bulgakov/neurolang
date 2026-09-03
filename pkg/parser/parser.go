@@ -33,6 +33,7 @@ var precedences = map[token.TokenType]int{
 	token.LTE:       LESSGREATER,
 	token.GT:        LESSGREATER,
 	token.GTE:       LESSGREATER,
+	token.IN:        LESSGREATER,
 	token.PLUS:      SUM,
 	token.MINUS:     SUM,
 	token.SLASH:     PRODUCT,
@@ -101,6 +102,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.GTE, p.parseInfixExpression)
 	p.registerInfix(token.AND, p.parseInfixExpression)
 	p.registerInfix(token.OR, p.parseInfixExpression)
+	p.registerInfix(token.IN, p.parseInfixExpression)
 	p.registerInfix(token.PIPE, p.parsePipeExpression)
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
@@ -184,17 +186,16 @@ func (p *Parser) ParseProgram() *ast.Program {
 }
 
 func (p *Parser) parseStatement() ast.Statement {
-	// Assignment: ident = expr
-	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
-		return p.parseAssignStatement()
-	}
-
 	if p.curTokenIs(token.RETURN) {
 		return p.parseReturnStatement()
 	}
 
 	if p.curTokenIs(token.WHILE) {
 		return p.parseWhileStatement()
+	}
+
+	if p.curTokenIs(token.FOR) {
+		return p.parseForStatement()
 	}
 
 	if p.curTokenIs(token.BREAK) {
@@ -213,7 +214,34 @@ func (p *Parser) parseStatement() ast.Statement {
 		return stmt
 	}
 
-	return p.parseExpressionStatement()
+	curTok := p.curToken
+	expr := p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.ASSIGN) {
+		p.nextToken() // move to '='
+		assignTok := p.curToken
+		p.nextToken() // move to value
+		val := p.parseExpression(LOWEST)
+
+		stmt := &ast.AssignStatement{
+			Token:  assignTok,
+			Target: expr,
+			Value:  val,
+		}
+		if ident, ok := expr.(*ast.Identifier); ok {
+			stmt.Name = ident
+		}
+		if p.peekTokenIs(token.SEMICOLON) {
+			p.nextToken()
+		}
+		return stmt
+	}
+
+	stmt := &ast.ExpressionStatement{Token: curTok, Expression: expr}
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
 }
 
 func (p *Parser) parseWhileStatement() *ast.WhileStatement {
@@ -221,6 +249,29 @@ func (p *Parser) parseWhileStatement() *ast.WhileStatement {
 	p.nextToken() // move past 'while'
 
 	stmt.Condition = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	stmt.Body = p.parseBlockStatement()
+	return stmt
+}
+
+func (p *Parser) parseForStatement() *ast.ForStatement {
+	stmt := &ast.ForStatement{Token: p.curToken}
+
+	if !p.expectPeek(token.IDENT) {
+		return nil
+	}
+	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
+	if !p.expectPeek(token.IN) {
+		return nil
+	}
+
+	p.nextToken() // move to iterable expression
+	stmt.Iterable = p.parseExpression(LOWEST)
 
 	if !p.expectPeek(token.LBRACE) {
 		return nil

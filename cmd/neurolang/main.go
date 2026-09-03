@@ -9,10 +9,11 @@ import (
 	"neurolang/pkg/parser"
 	"neurolang/pkg/tokenmetrics"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-const Version = "0.1.0-alpha"
+const Version = "0.3.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -47,6 +48,16 @@ func main() {
 		}
 		showStats(os.Args[2])
 
+	case "self":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: neurolang self <file.nl>")
+			os.Exit(1)
+		}
+		runSelfHosted(os.Args[2])
+
+	case "spec":
+		printSpec()
+
 	case "version", "-v", "--version":
 		fmt.Printf("NeuroLang v%s (AI-Native Runtime)\n", Version)
 
@@ -69,10 +80,12 @@ func printHelp() {
 	fmt.Printf(`NeuroLang v%s - AI-Native Programming Language & Runtime
 
 Usage:
-  neurolang run <file.nl>     Execute a NeuroLang script
+  neurolang run <file.nl>     Execute a NeuroLang script (Go host)
+  neurolang self <file.nl>    Execute via the self-hosted compiler (std/*.nl)
   neurolang eval "<code>"     Evaluate a one-line expression
   neurolang repl              Launch interactive REPL session
   neurolang stats <file.nl>   Analyze token footprint and efficiency
+  neurolang spec              Print the dense AI language spec
   neurolang version           Show version
 
 AI Combinators & Syntax Overview:
@@ -84,10 +97,14 @@ AI Combinators & Syntax Overview:
   .                           Current context item in pipeline
   ->                          Lambda / Arrow function (x -> x * 2)
   match                       Pattern matching
+  for x in xs                 Iterate list / chars / map keys
+  in                          Membership (list, map key, substring)
 
 Examples:
   neurolang run examples/01_basics.nl
+  neurolang self examples/01_basics.nl
   neurolang eval "[1, 2, 3, 4] | ?(. > 2) | @(. * 10)"
+  neurolang spec
 `, Version)
 }
 
@@ -97,26 +114,68 @@ func runFile(filename string) {
 		fmt.Fprintf(os.Stderr, "Error reading file %s: %s\n", filename, err)
 		os.Exit(1)
 	}
+	execSource(string(bytes), object.NewEnvironment(), true)
+}
 
-	code := string(bytes)
-	env := object.NewEnvironment()
+func execSource(code string, env *object.Environment, exitOnError bool) object.Object {
 	l := lexer.New(code)
 	p := parser.New(l)
 	program := p.ParseProgram()
 
 	if len(p.Errors()) > 0 {
-		fmt.Fprintf(os.Stderr, "Parse errors in %s:\n", filename)
+		fmt.Fprintf(os.Stderr, "Parse errors:\n")
 		for _, msg := range p.Errors() {
 			fmt.Fprintf(os.Stderr, "  - %s\n", msg)
 		}
-		os.Exit(1)
+		if exitOnError {
+			os.Exit(1)
+		}
+		return nil
 	}
 
 	evaluated := evaluator.Eval(program, env)
 	if evaluated != nil && evaluated.Type() == object.ERROR_OBJ {
 		fmt.Fprintf(os.Stderr, "%s\n", evaluated.Inspect())
+		if exitOnError {
+			os.Exit(1)
+		}
+	}
+	return evaluated
+}
+
+func runSelfHosted(filename string) {
+	bytes, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading file %s: %s\n", filename, err)
 		os.Exit(1)
 	}
+
+	env := object.NewEnvironment()
+	execSource(`
+load("std/lexer.nl")
+load("std/parser.nl")
+load("std/evaluator.nl")
+load("std/compiler.nl")
+`, env, true)
+
+	env.Set("__src", &object.String{Value: string(bytes)})
+	execSource("nl_eval(__src, null)", env, true)
+}
+
+func printSpec() {
+	candidates := []string{"SPEC_AI.md"}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "SPEC_AI.md"))
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			fmt.Print(string(data))
+			return
+		}
+	}
+	fmt.Fprintf(os.Stderr, "SPEC_AI.md not found (run from the NeuroLang repo root)\n")
+	os.Exit(1)
 }
 
 func evalCode(code string) {

@@ -132,6 +132,25 @@ func TestToolCallParsing(t *testing.T) {
 	}
 }
 
+func TestForInParsing(t *testing.T) {
+	input := `for x in items { print(x) }`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got=%d", len(program.Statements))
+	}
+	stmt, ok := program.Statements[0].(*ast.ForStatement)
+	if !ok {
+		t.Fatalf("stmt not *ast.ForStatement. got=%T", program.Statements[0])
+	}
+	if stmt.Name.Value != "x" {
+		t.Fatalf("loop var not 'x'. got=%s", stmt.Name.Value)
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

@@ -67,6 +67,8 @@ const (
 	ELSE     = "else"
 	MATCH    = "match"
 	WHILE    = "while"
+	FOR      = "for"
+	IN       = "in"
 	BREAK    = "break"
 	CONTINUE = "continue"
 	FN       = "fn"
@@ -81,6 +83,8 @@ var keywords = map[string]TokenType{
 	"else":     ELSE,
 	"match":    MATCH,
 	"while":    WHILE,
+	"for":      FOR,
+	"in":       IN,
 	"break":    BREAK,
 	"continue": CONTINUE,
 	"fn":       FN,

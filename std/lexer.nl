@@ -1,20 +1,25 @@
 # ==========================================================
-# std/lexer.nl: NeuroLang Lexer written in NeuroLang itself!
-# (Demonstrating self-hosting tokenizer capability)
+# std/lexer.nl — NeuroLang lexer written in NeuroLang
+# Token types match the Go host lexer (keywords keep lowercase types).
 # ==========================================================
 
 keywords = {
-  "while": "WHILE",
-  "break": "BREAK",
-  "continue": "CONTINUE",
-  "if": "IF",
-  "else": "ELSE",
-  "match": "MATCH",
-  "return": "RETURN",
-  "true": "TRUE",
-  "false": "FALSE",
-  "null": "NULL"
+  "while": "while",
+  "for": "for",
+  "in": "in",
+  "break": "break",
+  "continue": "continue",
+  "if": "if",
+  "else": "else",
+  "match": "match",
+  "return": "return",
+  "fn": "fn",
+  "true": "true",
+  "false": "false",
+  "null": "null"
 }
+
+two_ops = ["==", "!=", "<=", ">=", "&&", "||", "->"]
 
 tokenize = code -> {
   tokens = []
@@ -24,31 +29,30 @@ tokenize = code -> {
   while pos < n {
     ch = slice(code, pos, pos + 1)
 
-    # 1. Skip whitespace
+    # whitespace
     if is_space(ch) {
       pos = pos + 1
       continue
     }
 
-    # 2. Skip single-line comments (#)
-    if ch == "#" {
+    # comments: # ... or // ...
+    nxt = slice(code, pos + 1, pos + 2)
+    if ch == "#" || (ch == "/" && nxt == "/") {
       while pos < n && slice(code, pos, pos + 1) != "\n" {
         pos = pos + 1
       }
       continue
     }
 
-    # 3. Two-character operators: ==, !=, <=, >=, &&, ||, ->
-    next_ch = slice(code, pos + 1, pos + 2)
-    two_char = ch + next_ch
-
-    if two_char == "==" || two_char == "!=" || two_char == "<=" || two_char == ">=" || two_char == "&&" || two_char == "||" || two_char == "->" {
-      tokens = append(tokens, {type: two_char, literal: two_char})
+    # two-character operators
+    two = ch + nxt
+    if two in two_ops {
+      tokens = append(tokens, {type: two, literal: two})
       pos = pos + 2
       continue
     }
 
-    # 4. Numbers (Integer / Float)
+    # numbers
     if is_digit(ch) {
       start = pos
       while pos < n && is_digit(slice(code, pos, pos + 1)) {
@@ -66,7 +70,7 @@ tokenize = code -> {
       continue
     }
 
-    # 5. Identifiers and Keywords
+    # identifiers / keywords
     if is_alpha(ch) {
       start = pos
       while pos < n {
@@ -86,22 +90,36 @@ tokenize = code -> {
       continue
     }
 
-    # 6. Strings ("..." or '...')
+    # strings with escapes
     if ch == "\"" || ch == "'" {
       quote = ch
       pos = pos + 1
-      start = pos
+      str_val = ""
       while pos < n && slice(code, pos, pos + 1) != quote {
-        pos = pos + 1
+        c = slice(code, pos, pos + 1)
+        if c == "\\" {
+          pos = pos + 1
+          e = slice(code, pos, pos + 1)
+          esc = {n: "\n", t: "\t", r: "\r"}
+          mapped = esc[e]
+          if mapped != null {
+            str_val = str_val + mapped
+          } else if e == "\\" || e == "\"" || e == "'" {
+            str_val = str_val + e
+          } else {
+            str_val = str_val + e
+          }
+          pos = pos + 1
+        } else {
+          str_val = str_val + c
+          pos = pos + 1
+        }
       }
-      str_val = slice(code, start, pos)
       tokens = append(tokens, {type: "STRING", literal: str_val})
-      pos = pos + 1 # skip closing quote
+      pos = pos + 1
       continue
     }
 
-    # 7. Single-character operators and delimiters
-    # AI Combinators: |, ?, @, &, !, .
     tokens = append(tokens, {type: ch, literal: ch})
     pos = pos + 1
   }
@@ -109,19 +127,3 @@ tokenize = code -> {
   tokens = append(tokens, {type: "EOF", literal: ""})
   tokens
 }
-
-# ==========================================================
-# Self-Verification Test
-# ==========================================================
-sample_code = "users | ?(.age >= 18) | @.name | !print"
-
-print("--- Source Code to Tokenize ---")
-print(sample_code)
-print("")
-
-tokens = tokenize(sample_code)
-
-print("--- Generated Token Stream (Self-Hosted Lexer) ---")
-tokens | @("  [" + .type + "] => " + .literal) | @(print(.))
-print("")
-print("Total Tokens:", len(tokens))
