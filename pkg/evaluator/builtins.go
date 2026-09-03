@@ -483,6 +483,31 @@ func init() {
 		},
 	}
 
+	builtins["must"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("must expects 1 argument")
+			}
+			v := args[0]
+			if isError(v) {
+				return v
+			}
+			if IsErrMap(v) {
+				return newError("%s", FormatErr(v))
+			}
+			return v
+		},
+	}
+
+	builtins["is_err"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return nativeBoolToBooleanObject(false)
+			}
+			return nativeBoolToBooleanObject(IsErrMap(args[0]) || isError(args[0]))
+		},
+	}
+
 	builtins["builtins"] = &object.Builtin{
 		Fn: func(args ...object.Object) object.Object {
 			pairs := make(map[string]object.Object, len(builtins))

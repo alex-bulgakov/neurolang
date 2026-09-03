@@ -164,6 +164,13 @@ func evalNode(node ast.Node, env *object.Environment) object.Object {
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
+		if node.Operator == "??" {
+			left := Eval(node.Left, env)
+			if isError(left) || IsErrMap(left) || left == NULL {
+				return Eval(node.Right, env)
+			}
+			return left
+		}
 		if node.Operator == "&&" {
 			left := Eval(node.Left, env)
 			if isError(left) {
@@ -845,6 +852,9 @@ func evalIndexExpression(left, index object.Object) object.Object {
 }
 
 func evalPropertyExpression(left object.Object, property string) object.Object {
+	if e, ok := left.(*object.Error); ok {
+		left = e.AsMap()
+	}
 	m, ok := left.(*object.Map)
 	if !ok {
 		return NULL

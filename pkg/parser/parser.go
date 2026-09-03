@@ -11,6 +11,7 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	COALESCE    // ??
 	PIPE        // |
 	LOGICAL_OR  // ||
 	LOGICAL_AND // &&
@@ -24,6 +25,7 @@ const (
 )
 
 var precedences = map[token.TokenType]int{
+	token.COALESCE:  COALESCE,
 	token.PIPE:      PIPE,
 	token.OR:        LOGICAL_OR,
 	token.AND:       LOGICAL_AND,
@@ -104,6 +106,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.AND, p.parseInfixExpression)
 	p.registerInfix(token.OR, p.parseInfixExpression)
 	p.registerInfix(token.IN, p.parseInfixExpression)
+	p.registerInfix(token.COALESCE, p.parseInfixExpression)
 	p.registerInfix(token.PIPE, p.parsePipeExpression)
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
@@ -336,6 +339,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		// If peekToken is on a new line, only explicit continuation operators can extend the expression
 		if p.peekToken.Line > p.curToken.Line {
 			if p.peekToken.Type != token.PIPE &&
+				p.peekToken.Type != token.COALESCE &&
 				p.peekToken.Type != token.AND &&
 				p.peekToken.Type != token.OR &&
 				p.peekToken.Type != token.PLUS &&

@@ -136,6 +136,13 @@ eval_ast = (node, env, dot) -> {
       r = eval_ast(node.right, env, dot)
       if r { return true } else { return false }
     }
+    if op == "??" {
+      l = eval_ast(node.left, env, dot)
+      if l == null || (type(l) == "MAP" && l.err != null) {
+        return eval_ast(node.right, env, dot)
+      }
+      return l
+    }
     l = eval_ast(node.left, env, dot)
     r = eval_ast(node.right, env, dot)
     if op == "+" { return l + r }

@@ -116,7 +116,13 @@ func (l *Lexer) NextToken() token.Token {
 			tok = newToken(token.PIPE, l.ch, curLine, curCol)
 		}
 	case '?':
-		tok = newToken(token.FILTER, l.ch, curLine, curCol)
+		if l.peekChar() == '?' {
+			ch := l.ch
+			l.readChar()
+			tok = token.Token{Type: token.COALESCE, Literal: string(ch) + string(l.ch), Line: curLine, Col: curCol}
+		} else {
+			tok = newToken(token.FILTER, l.ch, curLine, curCol)
+		}
 	case '@':
 		tok = newToken(token.MAP, l.ch, curLine, curCol)
 	case '.':

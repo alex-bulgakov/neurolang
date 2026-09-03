@@ -99,6 +99,8 @@ Core builtins:
 | `ord chr is_digit is_alpha is_space` | character ops (for self-hosted lexing) |
 | `int str float` | conversions |
 | `copy apply` | map/list clone; `apply(fn, args_list)` |
+| `must is_err` | abort on `{err:...}`; predicate |
+| `??` | `x ?? 0` — use right if left is null or `{err:...}` |
 | `builtins` | snapshot of the builtin map (seed a guest env) |
 | `tool_call(name, args)` | invoke a registered tool by name |
 | `json parse_json type print load use` | host I/O and modules |

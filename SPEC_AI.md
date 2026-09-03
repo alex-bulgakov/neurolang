@@ -7,7 +7,8 @@
 P = S*
 S = "return" E? | "while" E B | "for" ID "in" E B | "break" | "continue" | L "=" E | E
 B = "{" S* "}"
-E = Pipe
+E = Coalesce
+Coalesce = Pipe ("??" Pipe)*
 Pipe = Or ("|" ( "?" E | "@" E | "&" E | Call | ID ))*
 Or = And ("||" And)*
 And = In ("&&" In)*
@@ -29,7 +30,7 @@ Blocks `{S*}` are expressions (value = last S). Map vs block: `{k:v}` if first p
 - `|` pipe: `x|f` == `f(x)`. Into `f(y)` becomes `f(x,y)`.
 - `.` current item in `| ? @ for`. `.field` reads field. Bare `.` is the item.
 - `?(pred)` filter. `@(expr)` map. `&(fn)` reduce. `!(tool)(...)` effect/MCP.
-- `->` lambda. `in` membership (list/map-key/substring).
+- `->` lambda. `in` membership. `??` default if null/err (`x ?? 0`). `must(v)` aborts on `{err:...}`.
 - `for x in xs { ... }` iterates list, string chars, or map keys. Sets `.`.
 
 ## Eval
@@ -38,7 +39,7 @@ Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module 
 
 ## Builtins
 `len keys values range append slice split join ord chr is_digit is_alpha is_space`
-`int str float copy apply type print json parse_json builtins tool_call load use`
+`int str float copy apply type print json parse_json builtins tool_call load use must is_err`
 
 ## Tools
 `!http.get/post !fs.list/read/write !env.get !time.now/sleep`

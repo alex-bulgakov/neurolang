@@ -364,6 +364,52 @@ n = ast.statements[0]
 	}
 }
 
+func TestMustAndCoalesce(t *testing.T) {
+	if v := testEval(`null ?? 7`); v.Inspect() != "7" {
+		t.Fatalf("?? null: got %s", v.Inspect())
+	}
+	if v := testEval(`{err: "boom"} ?? 9`); v.Inspect() != "9" {
+		t.Fatalf("?? err map: got %s", v.Inspect())
+	}
+	if v := testEval(`must(4)`); v.Inspect() != "4" {
+		t.Fatalf("must ok: got %s", v.Inspect())
+	}
+	if v := testEval(`must({err: "x"})`); !isError(v) {
+		t.Fatalf("must err should abort, got %s", v.Inspect())
+	}
+}
+
+func TestDogfoodStdParse(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	evaluated := testEval(`
+C = use "std/compiler"
+lex_ast = C.nl_parse(!fs.read("std/lexer.nl"))
+par_ast = C.nl_parse(!fs.read("std/parser.nl"))
+lex_ok = len(lex_ast.statements) > 0 && lex_ast.statements[0].type != "Err"
+par_ok = len(par_ast.statements) > 0 && par_ast.statements[0].type != "Err"
+[lex_ok, par_ok, len(lex_ast.statements), len(par_ast.statements)]
+`)
+	if isError(evaluated) {
+		t.Fatalf("dogfood parse failed: %s", evaluated.Inspect())
+	}
+	list, ok := evaluated.(*object.List)
+	if !ok || len(list.Elements) != 4 {
+		t.Fatalf("unexpected dogfood result: %s", evaluated.Inspect())
+	}
+	if !list.Elements[0].(*object.Boolean).Value || !list.Elements[1].(*object.Boolean).Value {
+		t.Fatalf("std parse produced Err: %s", evaluated.Inspect())
+	}
+}
+
 func TestListConcatAndSlice(t *testing.T) {
 	input := `
 a = [1, 2]

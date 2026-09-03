@@ -42,6 +42,7 @@ const (
 	// Dataflow & AI Combinators
 	PIPE   = "|"  // Dataflow pipeline
 	FILTER = "?"  // Filter stream / condition guard
+	COALESCE = "??" // null/err default
 	MAP    = "@"  // Projection / map
 	DOT    = "."  // Current item / field accessor
 	REDUCE = "&"  // Fold / reduce
