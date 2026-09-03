@@ -193,4 +193,159 @@ var builtins = map[string]*object.Builtin{
 			return &object.List{Elements: elements}
 		},
 	},
+
+	"slice": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) < 2 || len(args) > 3 {
+				return newError("slice expects (seq, start, [end])")
+			}
+			startObj, ok1 := args[1].(*object.Integer)
+			if !ok1 {
+				return newError("slice start must be INTEGER")
+			}
+			start := int(startObj.Value)
+
+			switch seq := args[0].(type) {
+			case *object.String:
+				runes := []rune(seq.Value)
+				length := len(runes)
+				end := length
+				if len(args) == 3 {
+					endObj, ok2 := args[2].(*object.Integer)
+					if !ok2 {
+						return newError("slice end must be INTEGER")
+					}
+					end = int(endObj.Value)
+				}
+				if start < 0 {
+					start = 0
+				}
+				if start > length {
+					start = length
+				}
+				if end < start {
+					end = start
+				}
+				if end > length {
+					end = length
+				}
+				return &object.String{Value: string(runes[start:end])}
+
+			case *object.List:
+				length := len(seq.Elements)
+				end := length
+				if len(args) == 3 {
+					endObj, ok2 := args[2].(*object.Integer)
+					if !ok2 {
+						return newError("slice end must be INTEGER")
+					}
+					end = int(endObj.Value)
+				}
+				if start < 0 {
+					start = 0
+				}
+				if start > length {
+					start = length
+				}
+				if end < start {
+					end = start
+				}
+				if end > length {
+					end = length
+				}
+				res := make([]object.Object, end-start)
+				copy(res, seq.Elements[start:end])
+				return &object.List{Elements: res}
+
+			default:
+				return newError("slice expects STRING or LIST, got %s", args[0].Type())
+			}
+		},
+	},
+
+	"append": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 2 {
+				return newError("append expects (LIST, elem)")
+			}
+			list, ok := args[0].(*object.List)
+			if !ok {
+				return newError("first argument to append must be LIST, got %s", args[0].Type())
+			}
+			res := make([]object.Object, 0, len(list.Elements)+1)
+			res = append(res, list.Elements...)
+			res = append(res, args[1])
+			return &object.List{Elements: res}
+		},
+	},
+
+	"ord": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("ord expects 1 argument")
+			}
+			str, ok := args[0].(*object.String)
+			if !ok || len(str.Value) == 0 {
+				return newError("ord expects non-empty STRING")
+			}
+			runes := []rune(str.Value)
+			return &object.Integer{Value: int64(runes[0])}
+		},
+	},
+
+	"chr": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("chr expects 1 argument")
+			}
+			code, ok := args[0].(*object.Integer)
+			if !ok {
+				return newError("chr expects INTEGER")
+			}
+			return &object.String{Value: string(rune(code.Value))}
+		},
+	},
+
+	"is_digit": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("is_digit expects 1 argument")
+			}
+			str, ok := args[0].(*object.String)
+			if !ok || len(str.Value) == 0 {
+				return &object.Boolean{Value: false}
+			}
+			r := []rune(str.Value)[0]
+			return &object.Boolean{Value: '0' <= r && r <= '9'}
+		},
+	},
+
+	"is_alpha": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("is_alpha expects 1 argument")
+			}
+			str, ok := args[0].(*object.String)
+			if !ok || len(str.Value) == 0 {
+				return &object.Boolean{Value: false}
+			}
+			r := []rune(str.Value)[0]
+			isA := ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || r == '_' || r == '$'
+			return &object.Boolean{Value: isA}
+		},
+	},
+
+	"is_space": {
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("is_space expects 1 argument")
+			}
+			str, ok := args[0].(*object.String)
+			if !ok || len(str.Value) == 0 {
+				return &object.Boolean{Value: false}
+			}
+			r := []rune(str.Value)[0]
+			return &object.Boolean{Value: r == ' ' || r == '\t' || r == '\n' || r == '\r'}
+		},
+	},
 }

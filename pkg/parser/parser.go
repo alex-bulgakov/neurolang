@@ -193,7 +193,41 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseReturnStatement()
 	}
 
+	if p.curTokenIs(token.WHILE) {
+		return p.parseWhileStatement()
+	}
+
+	if p.curTokenIs(token.BREAK) {
+		stmt := &ast.BreakStatement{Token: p.curToken}
+		if p.peekTokenIs(token.SEMICOLON) {
+			p.nextToken()
+		}
+		return stmt
+	}
+
+	if p.curTokenIs(token.CONTINUE) {
+		stmt := &ast.ContinueStatement{Token: p.curToken}
+		if p.peekTokenIs(token.SEMICOLON) {
+			p.nextToken()
+		}
+		return stmt
+	}
+
 	return p.parseExpressionStatement()
+}
+
+func (p *Parser) parseWhileStatement() *ast.WhileStatement {
+	stmt := &ast.WhileStatement{Token: p.curToken}
+	p.nextToken() // move past 'while'
+
+	stmt.Condition = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	stmt.Body = p.parseBlockStatement()
+	return stmt
 }
 
 func (p *Parser) parseAssignStatement() *ast.AssignStatement {
@@ -624,26 +658,13 @@ func (p *Parser) parseMapOrBlock() ast.Expression {
 		}
 	}
 
-	// Peek to distinguish between Map `{key: val}` and Block `{ stmt; stmt }`
-	// In map, first token is followed by `:`
-	p.nextToken()
-	keyTok := p.curToken
-	firstKey := p.parseMapKey()
+	p.nextToken() // move past '{'
 
-	if p.peekTokenIs(token.COLON) {
-		// It is a MapLiteral!
+	// If current token is followed by ':', it's a MapLiteral: { key: val, ... }
+	if (p.curTokenIs(token.IDENT) || p.curTokenIs(token.STRING)) && p.peekTokenIs(token.COLON) {
 		pairs := make(map[ast.Expression]ast.Expression)
-		p.nextToken() // consume ':'
-		p.nextToken() // move to value
-		val := p.parseExpression(LOWEST)
-		pairs[firstKey] = val
 
-		for p.peekTokenIs(token.COMMA) {
-			p.nextToken() // consume ','
-			if p.peekTokenIs(token.RBRACE) {
-				break
-			}
-			p.nextToken()
+		for {
 			key := p.parseMapKey()
 			if !p.expectPeek(token.COLON) {
 				return nil
@@ -651,6 +672,16 @@ func (p *Parser) parseMapOrBlock() ast.Expression {
 			p.nextToken()
 			val := p.parseExpression(LOWEST)
 			pairs[key] = val
+
+			if p.peekTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				if p.peekTokenIs(token.RBRACE) {
+					break
+				}
+				p.nextToken() // move to next key
+				continue
+			}
+			break
 		}
 
 		if !p.expectPeek(token.RBRACE) {
@@ -663,24 +694,14 @@ func (p *Parser) parseMapOrBlock() ast.Expression {
 		}
 	}
 
-	// Otherwise, it was an expression inside a block:
-	// We wrap statements
-	stmt := &ast.ExpressionStatement{Token: keyTok, Expression: firstKey}
-	statements := []ast.Statement{stmt}
-	if p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-
+	// Otherwise, it is a BlockStatement: { stmt; stmt; ... }
+	statements := []ast.Statement{}
 	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
-		if p.peekTokenIs(token.RBRACE) {
-			p.nextToken()
-			break
+		stmt := p.parseStatement()
+		if stmt != nil {
+			statements = append(statements, stmt)
 		}
 		p.nextToken()
-		s := p.parseStatement()
-		if s != nil {
-			statements = append(statements, s)
-		}
 	}
 
 	return &ast.BlockStatement{

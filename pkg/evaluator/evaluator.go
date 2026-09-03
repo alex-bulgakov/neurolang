@@ -3,8 +3,11 @@ package evaluator
 import (
 	"fmt"
 	"neurolang/pkg/ast"
+	"neurolang/pkg/lexer"
 	"neurolang/pkg/object"
+	"neurolang/pkg/parser"
 	"neurolang/pkg/tools"
+	"os"
 	"strings"
 )
 
@@ -31,6 +34,15 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return val
 		}
 		return &object.ReturnValue{Value: val}
+
+	case *ast.WhileStatement:
+		return evalWhileStatement(node, env)
+
+	case *ast.BreakStatement:
+		return &object.BreakSignal{}
+
+	case *ast.ContinueStatement:
+		return &object.ContinueSignal{}
 
 	case *ast.AssignStatement:
 		val := Eval(node.Value, env)
@@ -215,13 +227,39 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 
 		if result != nil {
 			rt := result.Type()
-			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ {
+			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ || rt == object.BREAK_SIGNAL_OBJ || rt == object.CONTINUE_SIGNAL_OBJ {
 				return result
 			}
 		}
 	}
 
 	return result
+}
+
+func evalWhileStatement(ws *ast.WhileStatement, env *object.Environment) object.Object {
+	for {
+		condition := Eval(ws.Condition, env)
+		if isError(condition) {
+			return condition
+		}
+
+		if !isTruthy(condition) {
+			break
+		}
+
+		res := Eval(ws.Body, env)
+		if res != nil {
+			if res.Type() == object.BREAK_SIGNAL_OBJ {
+				break
+			}
+			if res.Type() == object.RETURN_VALUE_OBJ || res.Type() == object.ERROR_OBJ {
+				return res
+			}
+			// CONTINUE_SIGNAL moves to next iteration
+		}
+	}
+
+	return NULL
 }
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
@@ -231,6 +269,31 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 
 	if builtin, ok := builtins[node.Value]; ok {
 		return builtin
+	}
+
+	if node.Value == "load" {
+		return &object.Builtin{
+			Fn: func(args ...object.Object) object.Object {
+				if len(args) != 1 {
+					return newError("load expects 1 argument (path)")
+				}
+				path := args[0].Inspect()
+				if s, ok := args[0].(*object.String); ok {
+					path = s.Value
+				}
+				bytes, err := os.ReadFile(path)
+				if err != nil {
+					return newError("load error: %s", err.Error())
+				}
+				l := lexer.New(string(bytes))
+				p := parser.New(l)
+				prog := p.ParseProgram()
+				if len(p.Errors()) > 0 {
+					return newError("load parse error: %s", p.Errors()[0])
+				}
+				return Eval(prog, env)
+			},
+		}
 	}
 
 	return newError("identifier not found: %s", node.Value)
@@ -298,7 +361,27 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 
 	// String concatenation
 	if left.Type() == object.STRING_OBJ && operator == "+" {
-		return &object.String{Value: left.Inspect() + right.Inspect()}
+		lVal := left.(*object.String).Value
+		rVal := right.Inspect()
+		if rStr, ok := right.(*object.String); ok {
+			rVal = rStr.Value
+		}
+		return &object.String{Value: lVal + rVal}
+	}
+
+	// List concatenation
+	if left.Type() == object.LIST_OBJ && operator == "+" {
+		leftList := left.(*object.List)
+		if rightList, ok := right.(*object.List); ok {
+			combined := make([]object.Object, 0, len(leftList.Elements)+len(rightList.Elements))
+			combined = append(combined, leftList.Elements...)
+			combined = append(combined, rightList.Elements...)
+			return &object.List{Elements: combined}
+		}
+		combined := make([]object.Object, 0, len(leftList.Elements)+1)
+		combined = append(combined, leftList.Elements...)
+		combined = append(combined, right)
+		return &object.List{Elements: combined}
 	}
 
 	return newError("type mismatch: %s %s %s", left.Type(), operator, right.Type())

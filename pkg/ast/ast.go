@@ -102,6 +102,34 @@ func (rs *ReturnStatement) String() string {
 	return "return"
 }
 
+type WhileStatement struct {
+	Token     token.Token // 'while'
+	Condition Expression
+	Body      *BlockStatement
+}
+
+func (ws *WhileStatement) statementNode()       {}
+func (ws *WhileStatement) TokenLiteral() string { return ws.Token.Literal }
+func (ws *WhileStatement) String() string {
+	return "while " + ws.Condition.String() + " " + ws.Body.String()
+}
+
+type BreakStatement struct {
+	Token token.Token // 'break'
+}
+
+func (bs *BreakStatement) statementNode()       {}
+func (bs *BreakStatement) TokenLiteral() string { return bs.Token.Literal }
+func (bs *BreakStatement) String() string       { return "break" }
+
+type ContinueStatement struct {
+	Token token.Token // 'continue'
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ContinueStatement) String() string       { return "continue" }
+
 // Expressions
 
 type Identifier struct {

@@ -17,8 +17,10 @@ const (
 	BOOLEAN_OBJ      = "BOOLEAN"
 	STRING_OBJ       = "STRING"
 	NULL_OBJ         = "NULL"
-	RETURN_VALUE_OBJ = "RETURN_VALUE"
-	ERROR_OBJ        = "ERROR"
+	RETURN_VALUE_OBJ    = "RETURN_VALUE"
+	BREAK_SIGNAL_OBJ    = "BREAK_SIGNAL"
+	CONTINUE_SIGNAL_OBJ = "CONTINUE_SIGNAL"
+	ERROR_OBJ           = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
 	BUILTIN_OBJ      = "BUILTIN"
 	LIST_OBJ         = "LIST"
@@ -82,6 +84,20 @@ type ReturnValue struct {
 func (rv *ReturnValue) Type() ObjectType   { return RETURN_VALUE_OBJ }
 func (rv *ReturnValue) Inspect() string    { return rv.Value.Inspect() }
 func (rv *ReturnValue) ToInterface() any   { return rv.Value.ToInterface() }
+
+// BreakSignal
+type BreakSignal struct{}
+
+func (bs *BreakSignal) Type() ObjectType   { return BREAK_SIGNAL_OBJ }
+func (bs *BreakSignal) Inspect() string    { return "break" }
+func (bs *BreakSignal) ToInterface() any   { return "break" }
+
+// ContinueSignal
+type ContinueSignal struct{}
+
+func (cs *ContinueSignal) Type() ObjectType   { return CONTINUE_SIGNAL_OBJ }
+func (cs *ContinueSignal) Inspect() string    { return "continue" }
+func (cs *ContinueSignal) ToInterface() any   { return "continue" }
 
 // Error
 type Error struct {

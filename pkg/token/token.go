@@ -60,25 +60,31 @@ const (
 	RBRACE   = "}"
 
 	// Keywords
-	TRUE   = "true"
-	FALSE  = "false"
-	NULL   = "null"
-	IF     = "if"
-	ELSE   = "else"
-	MATCH  = "match"
-	FN     = "fn"
-	RETURN = "return"
+	TRUE     = "true"
+	FALSE    = "false"
+	NULL     = "null"
+	IF       = "if"
+	ELSE     = "else"
+	MATCH    = "match"
+	WHILE    = "while"
+	BREAK    = "break"
+	CONTINUE = "continue"
+	FN       = "fn"
+	RETURN   = "return"
 )
 
 var keywords = map[string]TokenType{
-	"true":   TRUE,
-	"false":  FALSE,
-	"null":   NULL,
-	"if":     IF,
-	"else":   ELSE,
-	"match":  MATCH,
-	"fn":     FN,
-	"return": RETURN,
+	"true":     TRUE,
+	"false":    FALSE,
+	"null":     NULL,
+	"if":       IF,
+	"else":     ELSE,
+	"match":    MATCH,
+	"while":    WHILE,
+	"break":    BREAK,
+	"continue": CONTINUE,
+	"fn":       FN,
+	"return":   RETURN,
 }
 
 func LookupIdent(ident string) TokenType {

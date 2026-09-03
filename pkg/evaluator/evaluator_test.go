@@ -148,3 +148,64 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
 	}
 	return true
 }
+
+func TestWhileLoop(t *testing.T) {
+	input := `
+i = 0
+total = 0
+while i < 10 {
+  i = i + 1
+  if i == 5 {
+    continue
+  }
+  if i > 8 {
+    break
+  }
+  total = total + i
+}
+total
+`
+	evaluated := testEval(input)
+	// i will be 1, 2, 3, 4, (skips 5), 6, 7, 8 (breaks at 9)
+	// total = 1 + 2 + 3 + 4 + 6 + 7 + 8 = 31
+	testIntegerObject(t, evaluated, 31)
+}
+
+func TestListConcatAndSlice(t *testing.T) {
+	input := `
+a = [1, 2]
+b = [3, 4]
+c = a + b
+s = slice(c, 1, 3)
+s
+`
+	evaluated := testEval(input)
+	list, ok := evaluated.(*object.List)
+	if !ok {
+		t.Fatalf("expected list, got=%T", evaluated)
+	}
+	if len(list.Elements) != 2 || list.Elements[0].(*object.Integer).Value != 2 || list.Elements[1].(*object.Integer).Value != 3 {
+		t.Fatalf("unexpected slice result: %s", list.Inspect())
+	}
+}
+
+func TestCharBuiltins(t *testing.T) {
+	input := `
+c = chr(65)
+code = ord("B")
+isD = is_digit("7")
+isA = is_alpha("_")
+[c, code, isD, isA]
+`
+	evaluated := testEval(input)
+	list, ok := evaluated.(*object.List)
+	if !ok {
+		t.Fatalf("expected list, got=%T", evaluated)
+	}
+	if list.Elements[0].(*object.String).Value != "A" ||
+		list.Elements[1].(*object.Integer).Value != 66 ||
+		list.Elements[2].(*object.Boolean).Value != true ||
+		list.Elements[3].(*object.Boolean).Value != true {
+		t.Fatalf("unexpected char result: %s", list.Inspect())
+	}
+}
