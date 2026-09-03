@@ -417,6 +417,20 @@ func (ie *IfExpression) String() string {
 	return out.String()
 }
 
+type UseExpression struct {
+	Token token.Token // 'use'
+	Path  Expression
+}
+
+func (ue *UseExpression) expressionNode()      {}
+func (ue *UseExpression) TokenLiteral() string { return ue.Token.Literal }
+func (ue *UseExpression) String() string {
+	if ue.Path != nil {
+		return "use " + ue.Path.String()
+	}
+	return "use"
+}
+
 type MatchCase struct {
 	Pattern Expression // Literal or Identifier (e.g. `_` for default)
 	Body    Expression

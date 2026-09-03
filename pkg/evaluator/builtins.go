@@ -18,7 +18,7 @@ var builtins = map[string]*object.Builtin{
 			}
 			switch arg := args[0].(type) {
 			case *object.String:
-				return &object.Integer{Value: int64(len(arg.Value))}
+				return &object.Integer{Value: int64(len([]rune(arg.Value)))}
 			case *object.List:
 				return &object.Integer{Value: int64(len(arg.Elements))}
 			case *object.Map:
@@ -467,6 +467,19 @@ func init() {
 				return newError("tool_call: second argument must be LIST")
 			}
 			return tools.Call(name, list.Elements, nil)
+		},
+	}
+
+	builtins["use"] = &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			if len(args) != 1 {
+				return newError("use expects 1 argument (path)")
+			}
+			path := args[0].Inspect()
+			if s, ok := args[0].(*object.String); ok {
+				path = s.Value
+			}
+			return UseModule(path, activeEnv)
 		},
 	}
 

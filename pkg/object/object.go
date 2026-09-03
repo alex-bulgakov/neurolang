@@ -102,11 +102,36 @@ func (cs *ContinueSignal) ToInterface() any   { return "continue" }
 // Error
 type Error struct {
 	Message string
+	Line    int
+	Col     int
 }
 
-func (e *Error) Type() ObjectType   { return ERROR_OBJ }
-func (e *Error) Inspect() string    { return "Error: " + e.Message }
-func (e *Error) ToInterface() any   { return e.Message }
+func (e *Error) Type() ObjectType { return ERROR_OBJ }
+func (e *Error) Inspect() string {
+	if e.Line > 0 {
+		return fmt.Sprintf("Error: line %d, col %d: %s", e.Line, e.Col, e.Message)
+	}
+	return "Error: " + e.Message
+}
+func (e *Error) ToInterface() any {
+	m := map[string]any{"err": e.Message}
+	if e.Line > 0 {
+		m["line"] = int64(e.Line)
+		m["col"] = int64(e.Col)
+	}
+	return m
+}
+
+func (e *Error) AsMap() *Map {
+	pairs := map[string]Object{
+		"err": &String{Value: e.Message},
+	}
+	if e.Line > 0 {
+		pairs["line"] = &Integer{Value: int64(e.Line)}
+		pairs["col"] = &Integer{Value: int64(e.Col)}
+	}
+	return &Map{Pairs: pairs}
+}
 
 // Function
 type Function struct {

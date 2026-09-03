@@ -295,15 +295,11 @@ func TestMetaCircularSelfHost(t *testing.T) {
 	defer os.Chdir(old)
 
 	input := `
-load("std/lexer.nl")
-load("std/parser.nl")
-load("std/evaluator.nl")
-load("std/compiler.nl")
-
-a = nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null)
-b = nl_eval("square = n -> n * n\nsquare(8)", null)
-c = nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null)
-d = nl_eval("user = {name: \"Ada\", active: true}\nif user.active { user.name } else { \"no\" }", null)
+C = use "std/compiler"
+a = C.nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null)
+b = C.nl_eval("square = n -> n * n\nsquare(8)", null)
+c = C.nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null)
+d = C.nl_eval("u = {name: \"Ada\", active: true}\nif u.active { u.name } else { \"no\" }", null)
 [a, b, c, d]
 `
 	evaluated := testEval(input)
@@ -314,6 +310,57 @@ d = nl_eval("user = {name: \"Ada\", active: true}\nif user.active { user.name } 
 	want := `[[40, 60, 80], 64, 6, "Ada"]`
 	if got != want {
 		t.Fatalf("meta-circular mismatch:\nwant %s\ngot  %s", want, got)
+	}
+}
+
+func TestUseModule(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	evaluated := testEval(`
+L = use "std/lexer"
+toks = L.tokenize("a = 1")
+toks[0].type
+`)
+	if isError(evaluated) {
+		t.Fatalf("use failed: %s", evaluated.Inspect())
+	}
+	s, ok := evaluated.(*object.String)
+	if !ok || s.Value != "IDENT" {
+		t.Fatalf("expected IDENT token type, got %s", evaluated.Inspect())
+	}
+}
+
+func TestSelfHostedParseError(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	evaluated := testEval(`
+C = use "std/compiler"
+ast = C.nl_parse(")\n")
+n = ast.statements[0]
+[n.type, n.line, n.col]
+`)
+	if isError(evaluated) {
+		t.Fatalf("nl_parse failed: %s", evaluated.Inspect())
+	}
+	got := evaluated.Inspect()
+	if got != `["Err", 1, 1]` {
+		t.Fatalf("expected Err at 1:1, got %s", got)
 	}
 }
 

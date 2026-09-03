@@ -1,13 +1,19 @@
 # ==========================================================
-# std/compiler.nl — host bootstrap for the self-hosted compiler
-# Requires std/lexer.nl, std/parser.nl, std/evaluator.nl
+# std/compiler.nl — self-hosted frontend: tokenize, parse, eval
 # ==========================================================
+
+L = use "lexer.nl"
+P = use "parser.nl"
+E = use "evaluator.nl"
 
 nl_eval = (code, env) -> {
   if env == null {
     env = copy(builtins())
   }
-  unwrap(eval_ast(parse_program(tokenize(code)), env, null))
+  ast = P.parse_program(L.tokenize(code))
+  E.unwrap(E.eval_ast(ast, env, null))
 }
 
-nl_parse = code -> parse_program(tokenize(code))
+nl_parse = code -> P.parse_program(L.tokenize(code))
+
+{nl_eval: nl_eval, nl_parse: nl_parse}

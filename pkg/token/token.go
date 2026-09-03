@@ -71,7 +71,7 @@ const (
 	IN       = "in"
 	BREAK    = "break"
 	CONTINUE = "continue"
-	FN       = "fn"
+	USE      = "use"
 	RETURN   = "return"
 )
 
@@ -87,7 +87,7 @@ var keywords = map[string]TokenType{
 	"in":       IN,
 	"break":    BREAK,
 	"continue": CONTINUE,
-	"fn":       FN,
+	"use":      USE,
 	"return":   RETURN,
 }
 

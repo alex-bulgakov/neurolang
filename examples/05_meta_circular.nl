@@ -1,14 +1,11 @@
 # ==========================================================
 # 05_meta_circular.nl — self-hosted compiler proving ground
-# Host (Go) loads std/*.nl, then that stack evaluates guest NL.
 # ==========================================================
 
-print("=== NeuroLang v0.3 self-hosted compiler ===")
+print("=== NeuroLang v0.4 self-hosted compiler ===")
 
-load("std/lexer.nl")
-load("std/parser.nl")
-load("std/evaluator.nl")
-load("std/compiler.nl")
+C = use "std/compiler"
+L = use "std/lexer"
 
 check = (name, got, want) -> {
   if got == want {
@@ -21,26 +18,19 @@ check = (name, got, want) -> {
 }
 
 ok = true
+ok = check("pipe", C.nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null), [40, 60, 80]) && ok
+ok = check("lambda", C.nl_eval("square = n -> n * n\nsquare(8)", null), 64) && ok
+ok = check("for", C.nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null), 6) && ok
+ok = check("if/map", C.nl_eval("u = {name: \"Ada\", active: true}\nif u.active { u.name } else { \"no\" }", null), "Ada") && ok
+ok = check("in", C.nl_eval("3 in [1, 2, 3] && \"k\" in {k: 1}", null), true) && ok
 
-# 1. Dataflow combinators
-ok = check("pipe", nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null), [40, 60, 80]) && ok
-
-# 2. Functions + calls
-ok = check("lambda", nl_eval("square = n -> n * n\nsquare(8)", null), 64) && ok
-
-# 3. for-in + assignment
-ok = check("for", nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null), 6) && ok
-
-# 4. maps, property, if
-ok = check("if/map", nl_eval("u = {name: \"Ada\", active: true}\nif u.active { u.name } else { \"no\" }", null), "Ada") && ok
-
-# 5. membership
-ok = check("in", nl_eval("3 in [1, 2, 3] && \"k\" in {k: 1}", null), true) && ok
-
-# 6. Self-hosted lexer tokenizes a guest snippet (compiler eating compiler input)
 guest = "xs | @(. + 1)"
-toks = tokenize(guest)
+toks = L.tokenize(guest)
 ok = check("lex-count", len(toks), 9) && ok
+ok = check("lex-line", toks[0].line, 1) && ok
+
+bad = C.nl_parse(")\n")
+ok = check("parse-err", bad.statements[0].type, "Err") && ok
 
 if ok {
   print("")

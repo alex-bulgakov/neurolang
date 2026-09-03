@@ -25,7 +25,7 @@ Numbers: integers and floats (`3.14`).
 
 Identifiers: `[A-Za-z_$][A-Za-z0-9_]*`.
 
-Keywords: `true false null if else match while for in break continue return fn`.
+Keywords: `true false null if else match while for in break continue return use`.
 
 Two-character operators: `== != <= >= && || ->`.
 
@@ -101,28 +101,30 @@ Core builtins:
 | `copy apply` | map/list clone; `apply(fn, args_list)` |
 | `builtins` | snapshot of the builtin map (seed a guest env) |
 | `tool_call(name, args)` | invoke a registered tool by name |
-| `json parse_json type print load` | host I/O and modules |
+| `json parse_json type print load use` | host I/O and modules |
+
+`use "std/lexer"` evaluates the file in a **fresh** environment and returns an export map (the last map value, or all top-level bindings). Paths resolve from CWD, the caller module directory, and the repo root (`go.mod`). `load("f.nl")` still injects bindings into the current env.
 
 Tools (effects): `http.get` `http.post` `fs.list` `fs.read` `fs.write` `env.get` `time.now` `time.sleep`.
 
 ## 6. Self-hosting bootstrap
 
 ```
-Go host  --load-->  std/lexer.nl
-                 ->  std/parser.nl
-                 ->  std/evaluator.nl
-                 ->  std/compiler.nl   # nl_eval(code, env)
+Go host  --use-->  std/compiler.nl
+                      |-- use lexer.nl
+                      |-- use parser.nl
+                      |-- use evaluator.nl
                           |
                           v
-                 guest program AST + eval
+                 C.nl_eval / C.nl_parse
 ```
 
-`nl_eval(code, null)` uses `copy(builtins())` as the guest environment, so guest code can call `len`, `print`, `int`, … The evaluator represents NL closures as maps `{__fn, params, body, env, dot}` and control-flow as `{__sig, val}`.
+`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Closures are maps `{__fn, params, body, env, dot}` and control-flow is `{__sig, val}`.
 
 CLI:
 
 - `neurolang run file.nl` — Go host
-- `neurolang self file.nl` — host loads `std/*`, then evaluates the file with `nl_eval`
+- `neurolang self file.nl` — `use "std/compiler"` then `C.nl_eval`
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
 The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That is enough to rewrite lexer/parser/evaluator in NL and then grow the subset until the Go host is only a thin runtime.

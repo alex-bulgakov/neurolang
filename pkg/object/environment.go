@@ -4,6 +4,8 @@ type Environment struct {
 	store      map[string]Object
 	outer      *Environment
 	currentDot Object // Holds the value of '.' (current item in pipeline / filter / map)
+	File       string // absolute path of the module currently evaluating
+	Dir        string // directory of that module (for use-path resolution)
 }
 
 func NewEnvironment() *Environment {
@@ -19,6 +21,8 @@ func NewEnclosedEnvironment(outer *Environment) *Environment {
 	env.outer = outer
 	if outer != nil {
 		env.currentDot = outer.currentDot
+		env.File = outer.File
+		env.Dir = outer.Dir
 	}
 	return env
 }
@@ -48,4 +52,8 @@ func (e *Environment) GetDot() Object {
 		return e.outer.GetDot()
 	}
 	return nil
+}
+
+func (e *Environment) Bindings() map[string]Object {
+	return e.store
 }

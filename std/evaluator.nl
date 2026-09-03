@@ -41,6 +41,14 @@ eval_ast = (node, env, dot) -> {
   if nt == "Bool" { return node.val }
   if nt == "Null" { return null }
 
+  if nt == "Err" {
+    return {err: node.msg, line: node.line, col: node.col}
+  }
+
+  if nt == "Use" {
+    return use(eval_ast(node.path, env, dot))
+  }
+
   if nt == "Ident" { return env[node.name] }
 
   if nt == "Dot" {
@@ -68,6 +76,9 @@ eval_ast = (node, env, dot) -> {
     last = null
     for s in node.statements {
       last = eval_ast(s, env, dot)
+      if type(last) == "MAP" && last.err != null {
+        return last
+      }
       if type(last) == "MAP" && last.__sig != null {
         return last
       }
@@ -261,3 +272,5 @@ eval_ast = (node, env, dot) -> {
 
   null
 }
+
+{eval_ast: eval_ast, unwrap: unwrap}

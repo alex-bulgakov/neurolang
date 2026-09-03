@@ -132,6 +132,26 @@ func TestToolCallParsing(t *testing.T) {
 	}
 }
 
+func TestUseParsing(t *testing.T) {
+	input := `use "std/lexer"`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("stmt not expression. got=%T", program.Statements[0])
+	}
+	ue, ok := stmt.Expression.(*ast.UseExpression)
+	if !ok {
+		t.Fatalf("exp not *ast.UseExpression. got=%T", stmt.Expression)
+	}
+	sl, ok := ue.Path.(*ast.StringLiteral)
+	if !ok || sl.Value != "std/lexer" {
+		t.Fatalf("use path mismatch: %v", ue.Path)
+	}
+}
+
 func TestForInParsing(t *testing.T) {
 	input := `for x in items { print(x) }`
 	l := lexer.New(input)

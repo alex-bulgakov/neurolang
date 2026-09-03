@@ -8,17 +8,24 @@ import (
 	"neurolang/pkg/parser"
 	"neurolang/pkg/tools"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
 
 var (
-	NULL  = &object.Null{}
-	TRUE  = &object.Boolean{Value: true}
-	FALSE = &object.Boolean{Value: false}
+	NULL      = &object.Null{}
+	TRUE      = &object.Boolean{Value: true}
+	FALSE     = &object.Boolean{Value: false}
+	activeEnv *object.Environment
 )
 
 func Eval(node ast.Node, env *object.Environment) object.Object {
+	activeEnv = env
+	return evalNode(node, env)
+}
+
+func evalNode(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
 		return evalProgram(node, env)
@@ -254,6 +261,17 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.MatchExpression:
 		return evalMatchExpression(node, env)
 
+	case *ast.UseExpression:
+		pathVal := Eval(node.Path, env)
+		if isError(pathVal) {
+			return pathVal
+		}
+		path := pathVal.Inspect()
+		if s, ok := pathVal.(*object.String); ok {
+			path = s.Value
+		}
+		return UseModule(path, env)
+
 	// Naked Combinators outside pipe (evaluated against current dot)
 	case *ast.FilterExpression:
 		dot := env.GetDot()
@@ -416,17 +434,22 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 				if s, ok := args[0].(*object.String); ok {
 					path = s.Value
 				}
-				bytes, err := os.ReadFile(path)
-				if err != nil {
-					return newError("load error: %s", err.Error())
+				return LoadInto(path, env)
+			},
+		}
+	}
+
+	if node.Value == "use" {
+		return &object.Builtin{
+			Fn: func(args ...object.Object) object.Object {
+				if len(args) != 1 {
+					return newError("use expects 1 argument (path)")
 				}
-				l := lexer.New(string(bytes))
-				p := parser.New(l)
-				prog := p.ParseProgram()
-				if len(p.Errors()) > 0 {
-					return newError("load parse error: %s", p.Errors()[0])
+				path := args[0].Inspect()
+				if s, ok := args[0].(*object.String); ok {
+					path = s.Value
 				}
-				return Eval(prog, env)
+				return UseModule(path, env)
 			},
 		}
 	}
@@ -1037,4 +1060,183 @@ func isError(obj object.Object) bool {
 
 func callToolByName(name string, args []object.Object, env *object.Environment) object.Object {
 	return tools.Call(name, args, env)
+}
+
+func ResolveModulePath(path string, env *object.Environment) (string, error) {
+	variants := []string{path}
+	if !strings.HasSuffix(path, ".nl") {
+		variants = append(variants, path+".nl")
+	}
+
+	var candidates []string
+	add := func(p string) {
+		if p != "" {
+			candidates = append(candidates, p)
+		}
+	}
+	for _, v := range variants {
+		add(v)
+		if env != nil && env.Dir != "" {
+			add(filepath.Join(env.Dir, v))
+		}
+		if cwd, err := os.Getwd(); err == nil {
+			add(filepath.Join(cwd, v))
+			dir := cwd
+			for {
+				add(filepath.Join(dir, v))
+				if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+					break
+				}
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					break
+				}
+				dir = parent
+			}
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, c := range candidates {
+		abs, err := filepath.Abs(c)
+		if err != nil {
+			continue
+		}
+		if seen[abs] {
+			continue
+		}
+		seen[abs] = true
+		if st, err := os.Stat(abs); err == nil && !st.IsDir() {
+			return abs, nil
+		}
+	}
+	return "", fmt.Errorf("module not found: %s", path)
+}
+
+func UseModule(path string, from *object.Environment) object.Object {
+	resolved, err := ResolveModulePath(path, from)
+	if err != nil {
+		return newError("use: %s", err.Error())
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return newError("use: %s", err.Error())
+	}
+	prog, perr := parseSource(string(data), resolved)
+	if perr != nil {
+		return perr
+	}
+	modEnv := object.NewEnvironment()
+	modEnv.File = resolved
+	modEnv.Dir = filepath.Dir(resolved)
+	result := Eval(prog, modEnv)
+	if isError(result) {
+		return result
+	}
+	if m, ok := result.(*object.Map); ok {
+		return m
+	}
+	return exportBindings(modEnv)
+}
+
+func LoadInto(path string, env *object.Environment) object.Object {
+	resolved, err := ResolveModulePath(path, env)
+	if err != nil {
+		return newError("load: %s", err.Error())
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return newError("load error: %s", err.Error())
+	}
+	prog, perr := parseSource(string(data), resolved)
+	if perr != nil {
+		return perr
+	}
+	prevFile, prevDir := env.File, env.Dir
+	env.File = resolved
+	env.Dir = filepath.Dir(resolved)
+	result := Eval(prog, env)
+	env.File = prevFile
+	env.Dir = prevDir
+	return result
+}
+
+func parseSource(source, filename string) (*ast.Program, *object.Error) {
+	l := lexer.New(source)
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		return nil, newError("%s: %s", filename, p.Errors()[0])
+	}
+	return prog, nil
+}
+
+func exportBindings(env *object.Environment) *object.Map {
+	pairs := make(map[string]object.Object)
+	for k, v := range env.Bindings() {
+		if strings.HasPrefix(k, "__") {
+			continue
+		}
+		pairs[k] = v
+	}
+	return &object.Map{Pairs: pairs}
+}
+
+func ErrMap(msg string, line, col int) *object.Map {
+	pairs := map[string]object.Object{
+		"err": &object.String{Value: msg},
+	}
+	if line > 0 {
+		pairs["line"] = &object.Integer{Value: int64(line)}
+		pairs["col"] = &object.Integer{Value: int64(col)}
+	}
+	return &object.Map{Pairs: pairs}
+}
+
+func IsErrMap(obj object.Object) bool {
+	if obj == nil {
+		return false
+	}
+	if obj.Type() == object.ERROR_OBJ {
+		return true
+	}
+	m, ok := obj.(*object.Map)
+	if !ok {
+		return false
+	}
+	v, exists := m.Pairs["err"]
+	if !exists || v == nil || v == NULL {
+		return false
+	}
+	if s, ok := v.(*object.String); ok {
+		return s.Value != ""
+	}
+	return true
+}
+
+func FormatErr(obj object.Object) string {
+	if e, ok := obj.(*object.Error); ok {
+		return e.Inspect()
+	}
+	m, ok := obj.(*object.Map)
+	if !ok {
+		return obj.Inspect()
+	}
+	msg := ""
+	if s, ok := m.Pairs["err"].(*object.String); ok {
+		msg = s.Value
+	} else if v, ok := m.Pairs["err"]; ok && v != nil {
+		msg = v.Inspect()
+	}
+	line, col := int64(0), int64(0)
+	if i, ok := m.Pairs["line"].(*object.Integer); ok {
+		line = i.Value
+	}
+	if i, ok := m.Pairs["col"].(*object.Integer); ok {
+		col = i.Value
+	}
+	if line > 0 {
+		return fmt.Sprintf("Error: line %d, col %d: %s", line, col, msg)
+	}
+	return "Error: " + msg
 }

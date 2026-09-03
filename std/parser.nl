@@ -72,6 +72,15 @@ parse_pattern = state -> {
   parse_expr(state, 90)
 }
 
+make_err = (state, msg) -> {
+  t = cur(state)
+  ln = t.line
+  cl = t.col
+  if ln == null { ln = 0 }
+  if cl == null { cl = 0 }
+  {type: "Err", msg: msg, line: ln, col: cl}
+}
+
 parse_primary = state -> {
   t = cur(state)
 
@@ -241,13 +250,19 @@ parse_primary = state -> {
     return {type: "Match", subj: subj, cases: cases}
   }
 
-  null
+  if t.type == "use" {
+    adv(state)
+    return {type: "Use", path: parse_expr(state, 75)}
+  }
+
+  adv(state)
+  {type: "Err", msg: "no prefix for " + str(t.type), line: t.line, col: t.col}
 }
 
 parse_expr = (state, prec) -> {
   left = parse_primary(state)
-  if left == null {
-    return null
+  if left == null || left.type == "Err" {
+    return left
   }
 
   while cur(state).type != "EOF" && prec < get_prec(cur(state).type) {
@@ -323,7 +338,10 @@ parse_statement = state -> {
   }
 
   expr = parse_expr(state, 0)
-  if expr == null {
+  if expr == null || expr.type == "Err" {
+    if expr != null && expr.type == "Err" {
+      return expr
+    }
     adv(state)
     return null
   }
@@ -350,3 +368,5 @@ parse_program = tokens -> {
   }
   {type: "Program", statements: stmts}
 }
+
+{parse_program: parse_program}

@@ -17,7 +17,7 @@ Sum = Prod (("+"|"-") Prod)*
 Prod = Pref (("*"|"/"|"%") Pref)*
 Pref = ("-"|"!") Pref | Post
 Post = Atom (("(" Args ")" | "[" E "]" | "." ID))*
-Atom = NUM | STR | true | false | null | ID | List | Map | Lambda | "if" E B ("else" (B|"if"...))? | "match" E "{" (Pat "->" E)* "}" | "." ID? | "(" E ")" | "!" ID("." ID)* ("(" Args ")")?
+Atom = NUM | STR | true | false | null | ID | List | Map | Lambda | "if" E B ("else" (B|"if"...))? | "match" E "{" (Pat "->" E)* "}" | "." ID? | "(" E ")" | "!" ID("." ID)* ("(" Args ")")? | "use" E
 Lambda = ID "->" E | "(" ID* ")" "->" E
 List = "[" Args "]"
 Map = "{" (ID|STR) ":" E ("," (ID|STR) ":" E)* "}"
@@ -34,11 +34,11 @@ Blocks `{S*}` are expressions (value = last S). Map vs block: `{k:v}` if first p
 
 ## Eval
 Dynamic types: int float bool str null list map fn. `==` deep. `&&` `||` short-circuit.
-Assign mutates ident / `obj.field` / `obj[k]`. `load("f.nl")` execs into current env.
+Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module in a fresh env and returns its export map (`L.tokenize`). `load("f.nl")` still dumps bindings into the current env.
 
 ## Builtins
 `len keys values range append slice split join ord chr is_digit is_alpha is_space`
-`int str float copy apply type print json parse_json builtins tool_call load`
+`int str float copy apply type print json parse_json builtins tool_call load use`
 
 ## Tools
 `!http.get/post !fs.list/read/write !env.get !time.now/sleep`
@@ -55,8 +55,9 @@ match role { "admin" -> "H", _ -> "L" }
 
 ## Self-host
 Host Go runtime. Compiler subset lives in `std/{lexer,parser,evaluator,compiler}.nl`.
-`nl_eval(code, env)` tokenizes+parses+evals. `env=null` => `copy(builtins())`.
-CLI: `neurolang self file.nl` runs a program through that stack.
+`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`.
+Last map in a module file is the export; otherwise all top-level names.
+CLI: `neurolang self file.nl` runs a program through that stack. Parse errors are `{type:"Err", msg, line, col}`.
 
 ## Style for generation
 No `def/function/class/import`. Prefer `| ? @` over loops. Short names. Omit types.

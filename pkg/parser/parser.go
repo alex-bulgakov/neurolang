@@ -81,6 +81,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.LBRACE, p.parseMapOrBlock)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	p.registerPrefix(token.MATCH, p.parseMatchExpression)
+	p.registerPrefix(token.USE, p.parseUseExpression)
 
 	// AI Combinators as prefix
 	p.registerPrefix(token.FILTER, p.parseFilterExpression)
@@ -793,6 +794,13 @@ func (p *Parser) parseIfExpression() ast.Expression {
 	}
 
 	return expression
+}
+
+func (p *Parser) parseUseExpression() ast.Expression {
+	expr := &ast.UseExpression{Token: p.curToken}
+	p.nextToken()
+	expr.Path = p.parseExpression(PREFIX)
+	return expr
 }
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {

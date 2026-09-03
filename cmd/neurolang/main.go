@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -97,6 +97,7 @@ AI Combinators & Syntax Overview:
   .                           Current context item in pipeline
   ->                          Lambda / Arrow function (x -> x * 2)
   match                       Pattern matching
+  neurolang use "mod"         Load module, return export map
   for x in xs                 Iterate list / chars / map keys
   in                          Membership (list, map key, substring)
 
@@ -151,15 +152,13 @@ func runSelfHosted(filename string) {
 	}
 
 	env := object.NewEnvironment()
-	execSource(`
-load("std/lexer.nl")
-load("std/parser.nl")
-load("std/evaluator.nl")
-load("std/compiler.nl")
-`, env, true)
-
+	execSource(`C = use "std/compiler"`, env, true)
 	env.Set("__src", &object.String{Value: string(bytes)})
-	execSource("nl_eval(__src, null)", env, true)
+	result := execSource("C.nl_eval(__src, null)", env, true)
+	if evaluator.IsErrMap(result) {
+		fmt.Fprintf(os.Stderr, "%s\n", evaluator.FormatErr(result))
+		os.Exit(1)
+	}
 }
 
 func printSpec() {
