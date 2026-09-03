@@ -58,7 +58,7 @@ match role { "admin" -> "H", _ -> "L" }
 Host is a stack VM (bytecode). Compiler subset lives in `std/{lexer,parser,evaluator,compile,compiler}.nl`.
 `C = use "std/compiler"` then `C.nl_eval(code, env)` (tree-walk guest) or `vm_run(C.nl_compile(ast), env)` (bytecode).
 `env=null` => `copy(builtins())`. Last map in a module file is the export; otherwise all top-level names.
-CLI: `neurolang run` executes on the VM. `neurolang self` runs through `std/compiler`. Parse errors are `{type:"Err", msg, line, col}`.
+CLI: `neurolang run` executes on the VM. `neurolang self` runs through `std/compiler`. `neurolang tools` prints the effect catalog. `neurolang mcp` is stdio JSON-RPC (`tools/list`, `tools/call`) over the same registry. Parse errors are `{type:"Err", msg, line, col}`.
 `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation

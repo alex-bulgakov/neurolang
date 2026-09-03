@@ -129,8 +129,10 @@ Go host (stack VM)  --use-->  std/compiler.nl
 
 CLI:
 
-- `neurolang run file.nl` — Go host
+- `neurolang run file.nl` — Go host (stack VM)
 - `neurolang self file.nl` — `use "std/compiler"` then `C.nl_eval`
+- `neurolang tools` — compact `!tool` catalog for models
+- `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
 The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That is enough to rewrite lexer/parser/evaluator in NL and then grow the subset until the Go host is only a thin runtime.

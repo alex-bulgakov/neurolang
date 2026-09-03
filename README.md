@@ -98,6 +98,10 @@ go build -o neurolang.exe ./cmd/neurolang
 # 5. Плотная спецификация для LLM (класть в system prompt)
 ./neurolang spec
 
+# 5b. Каталог инструментов и MCP
+./neurolang tools
+./neurolang mcp
+
 # 6. Анализ расхода токенов BPE и сравнение с Python
 ./neurolang stats examples/04_token_comparison.nl examples/04_comparison.py
 ```
@@ -117,11 +121,12 @@ go test -v ./...
 ```
 neurolang/
 ├── cmd/
-│   └── neurolang/main.go      # Точка входа CLI (run, eval, repl, stats)
+│   └── neurolang/main.go      # CLI (run, eval, repl, self, spec, tools, mcp)
 ├── pkg/
 │   ├── ast/                   # Синтаксическое дерево (AST)
-│   ├── evaluator/             # Tree-walking интерпретатор и встроенные функции
+│   ├── evaluator/             # Компилятор в байткод и стековая VM
 │   ├── lexer/                 # Токенизатор
+│   ├── mcp/                   # MCP JSON-RPC (stdio)
 │   ├── object/                # Система рантайм-типов (Int, Float, List, Map, Fn...)
 │   ├── parser/                # Pratt-парсер с поддержкой пайплайнов и комбинаторов
 │   ├── token/                 # Определения токенов

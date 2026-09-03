@@ -1,5 +1,5 @@
 # Neurolang GBNF (llama.cpp / outlines constrained decoding)
-# Subset covering the AI-native core. Keep this in lockstep with SPEC_AI.md.
+# Keep in lockstep with SPEC_AI.md (v0.4 use, v0.5 ??).
 
 root ::= program
 
@@ -22,7 +22,8 @@ lvalue ::= ident (("." ident) | ("[" expr "]"))*
 
 block ::= "{" ws (statement)* "}" ws
 
-expr ::= pipe
+expr ::= coalesce
+coalesce ::= pipe (ws "??" ws pipe)*
 
 pipe ::= or (ws "|" ws pipe-rhs)*
 pipe-rhs ::= ("?" expr) | ("@" expr) | ("&" expr) | postfix
@@ -41,10 +42,12 @@ dot ::= "." ident
 
 atom ::=
     number | string | "true" | "false" | "null"
+  | use-expr
   | ident (ws "->" ws expr)?
   | list | map-or-block
   | if-expr | match-expr | context-dot | tool | grouped
 
+use-expr ::= "use" ws expr
 grouped ::= "(" ws (ident (ws "," ws ident)* ")" ws "->" ws expr | expr ")")
 list ::= "[" ws args? "]"
 map-or-block ::= "{" ws (map-pairs | (statement)*) "}"

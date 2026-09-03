@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"neurolang/pkg/evaluator"
 	"neurolang/pkg/lexer"
+	"neurolang/pkg/mcp"
 	"neurolang/pkg/object"
 	"neurolang/pkg/parser"
 	"neurolang/pkg/tokenmetrics"
+	"neurolang/pkg/tools"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-const Version = "0.6.0"
+const Version = "0.7.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -58,6 +60,16 @@ func main() {
 	case "spec":
 		printSpec()
 
+	case "mcp":
+		mcp.Version = Version
+		if err := mcp.Serve(os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			os.Exit(1)
+		}
+
+	case "tools":
+		printToolCatalog()
+
 	case "version", "-v", "--version":
 		fmt.Printf("NeuroLang v%s (AI-Native Runtime)\n", Version)
 
@@ -86,6 +98,8 @@ Usage:
   neurolang repl              Launch interactive REPL session
   neurolang stats <file.nl>   Analyze token footprint and efficiency
   neurolang spec              Print the dense AI language spec
+  neurolang tools             Compact tool catalog for models
+  neurolang mcp               MCP stdio JSON-RPC (tools/list, tools/call)
   neurolang version           Show version
 
 AI Combinators & Syntax Overview:
@@ -175,6 +189,18 @@ func printSpec() {
 	}
 	fmt.Fprintf(os.Stderr, "SPEC_AI.md not found (run from the NeuroLang repo root)\n")
 	os.Exit(1)
+}
+
+func printToolCatalog() {
+	for _, s := range tools.Catalog() {
+		sig := "!" + s.Name
+		if len(s.Params) > 0 {
+			sig += "(" + strings.Join(s.Params, ",") + ")"
+		} else {
+			sig += "()"
+		}
+		fmt.Printf("%-22s %s  %s\n", sig, s.Alias, s.Description)
+	}
 }
 
 func evalCode(code string) {
