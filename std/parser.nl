@@ -61,6 +61,11 @@ get_prec = tok_type -> {
   if p == null { 0 } else { p }
 }
 
+# Host Pratt: infix does not cross newline except these ops.
+line_cont = op -> {
+  op == "|" || op == "??" || op == "&&" || op == "||" || op == "+" || op == "-" || op == "*" || op == "/"
+}
+
 parse_pattern = state -> {
   t = cur(state)
   if t.type == "IDENT" { adv(state); return {type: "Ident", name: t.literal} }
@@ -267,7 +272,14 @@ parse_expr = (state, prec) -> {
   }
 
   while cur(state).type != "EOF" && prec < get_prec(cur(state).type) {
-    op = cur(state).type
+    op_tok = cur(state)
+    if state.pos > 0 {
+      prev = state.tokens[state.pos - 1]
+      if op_tok.line > prev.line && line_cont(op_tok.type) == false {
+        break
+      }
+    }
+    op = op_tok.type
     adv(state)
 
     if op == "(" {

@@ -85,6 +85,8 @@ x in [1, 2, 3]       # list membership
 
 `&&` and `||` short-circuit.
 
+An infix/postfix operator on a **new line** does not continue the previous expression, except `| ?? && || + - * /`. So a `match` / lambda that ends with `}` is not indexed by a `[...]` on the next line.
+
 ## 5. Values and builtins
 
 Types: `INTEGER FLOAT BOOLEAN STRING NULL LIST MAP FUNCTION BUILTIN`.
@@ -134,7 +136,7 @@ CLI:
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
-The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That is enough to rewrite lexer/parser/evaluator in NL and then grow the subset until the Go host is only a thin runtime.
+The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. That is enough to rewrite lexer/parser/compiler in NL and then grow the subset until the Go host is only a thin runtime.
 
 ## 7. Generation rules for agents
 

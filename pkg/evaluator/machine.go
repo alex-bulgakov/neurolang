@@ -331,9 +331,16 @@ func (m *machine) pop() object.Object {
 }
 func (m *machine) peek() object.Object { return m.stack[len(m.stack)-1] }
 
+var applyDepth int
+
 func (m *machine) apply(fn object.Object, args []object.Object, env *object.Environment) object.Object {
 	switch f := fn.(type) {
 	case *vmClosure:
+		if applyDepth > 4096 {
+			return newError("call stack overflow")
+		}
+		applyDepth++
+		defer func() { applyDepth-- }()
 		ex := object.NewEnclosedEnvironment(f.env)
 		if env != nil {
 			if d := env.GetDot(); d != nil {

@@ -1012,11 +1012,20 @@ func isTruthy(obj object.Object) bool {
 }
 
 func areEqual(a, b object.Object) bool {
+	return areEqualDepth(a, b, 0)
+}
+
+func areEqualDepth(a, b object.Object, depth int) bool {
 	if a == b {
 		return true
 	}
+	if depth > 64 {
+		return false
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	if a.Type() != b.Type() {
-		// Check integer and float comparison
 		if isNumeric(a) && isNumeric(b) {
 			return getFloatVal(a) == getFloatVal(b)
 		}
@@ -1039,7 +1048,7 @@ func areEqual(a, b object.Object) bool {
 			return false
 		}
 		for i := range a.Elements {
-			if !areEqual(a.Elements[i], bList.Elements[i]) {
+			if !areEqualDepth(a.Elements[i], bList.Elements[i], depth+1) {
 				return false
 			}
 		}
@@ -1051,7 +1060,7 @@ func areEqual(a, b object.Object) bool {
 		}
 		for k, vA := range a.Pairs {
 			vB, ok := bMap.Pairs[k]
-			if !ok || !areEqual(vA, vB) {
+			if !ok || !areEqualDepth(vA, vB, depth+1) {
 				return false
 			}
 		}

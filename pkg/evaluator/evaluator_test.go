@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"fmt"
 	"neurolang/pkg/lexer"
 	"neurolang/pkg/object"
 	"neurolang/pkg/parser"
@@ -430,6 +431,140 @@ vm_run(bc, copy(builtins()))
 		t.Fatalf("nl_compile/vm_run failed: %s", evaluated.Inspect())
 	}
 	testIntegerObject(t, evaluated, 6)
+}
+
+func TestHostGuestParity(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	boot := object.NewEnvironment()
+	if v := evalSource(`C = use "std/compiler"`, boot); isError(v) {
+		t.Fatalf("boot compiler: %s", v.Inspect())
+	}
+
+	cases := []string{
+		`5 + 2 * 10`,
+		`-50 + 100 + -50`,
+		`[1, 2, 3, 4, 5] | ?(. > 3)`,
+		`[1, 2, 3] | @(. * 10)`,
+		`[1, 2, 3, 4] | &((a, b) -> a + b)`,
+		`
+users = [
+  {name: "Alice", age: 25, active: true},
+  {name: "Bob", age: 17, active: true},
+  {name: "Charlie", age: 30, active: false}
+]
+users | ?(.active && .age >= 18) | @.name
+`,
+		`
+items = [{id: 1, price: 100}, {id: 2, price: 200}]
+items | @{id: .id, total: .price * 1.2}
+`,
+		`
+makeAdder = x -> (y -> x + y)
+addTwo = makeAdder(2)
+addTwo(3)
+`,
+		`
+classify = n -> match n {
+  0 -> "zero"
+  1 -> "one"
+  _ -> "many"
+}
+[classify(0), classify(1), classify(99)]
+`,
+		`
+i = 0
+total = 0
+while i < 10 {
+  i = i + 1
+  if i == 5 {
+    continue
+  }
+  if i > 8 {
+    break
+  }
+  total = total + i
+}
+total
+`,
+		`
+acc = 0
+for n in [1, 2, 3, 4] {
+  acc = acc + n
+}
+acc
+`,
+		`3 in [1, 2, 3]`,
+		`"name" in {name: "Ada", role: "agent"}`,
+		`"bc" in "abcd"`,
+		`null ?? 7`,
+		`{err: "boom"} ?? 9`,
+		`must(4)`,
+		`
+obj = {count: 1}
+obj.count = obj.count + 4
+obj["tag"] = "ok"
+obj.count + len(obj)
+`,
+		`false && (1 / 0)`,
+		`true || (1 / 0)`,
+		`
+L = use "std/lexer"
+toks = L.tokenize("a = 1")
+toks[0].type
+`,
+		`no_such_ident`,
+		`must({err: "x"})`,
+	}
+
+	for i, src := range cases {
+		name := fmt.Sprintf("%d", i)
+		t.Run(name, func(t *testing.T) {
+			host := testEval(src)
+			boot.Set("__src", &object.String{Value: src})
+			guest := evalSource(`C.nl_eval(__src, null)`, boot)
+			if !parityOK(host, guest) {
+				t.Errorf("host=%s\nguest=%s\nsrc:\n%s", inspectParity(host), inspectParity(guest), src)
+			}
+		})
+	}
+}
+
+func evalSource(code string, env *object.Environment) object.Object {
+	l := lexer.New(code)
+	p := parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		return newError("%s", p.Errors()[0])
+	}
+	return Eval(prog, env)
+}
+
+func parityOK(host, guest object.Object) bool {
+	hostErr := isError(host) || IsErrMap(host)
+	guestErr := isError(guest) || IsErrMap(guest)
+	if hostErr || guestErr {
+		return hostErr && guestErr
+	}
+	if host == nil || guest == nil {
+		return host == guest
+	}
+	return host.Inspect() == guest.Inspect()
+}
+
+func inspectParity(v object.Object) string {
+	if v == nil {
+		return "<nil>"
+	}
+	return v.Inspect()
 }
 
 func TestListConcatAndSlice(t *testing.T) {

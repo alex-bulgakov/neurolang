@@ -34,7 +34,7 @@ Blocks `{S*}` are expressions (value = last S). Map vs block: `{k:v}` if first p
 - `for x in xs { ... }` iterates list, string chars, or map keys. Sets `.`.
 
 ## Eval
-Dynamic types: int float bool str null list map fn. `==` deep. `&&` `||` short-circuit.
+Dynamic types: int float bool str null list map fn. `==` deep. `&&` `||` short-circuit. Infix does not cross newline except `| ?? && || + - * /`.
 Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module in a fresh env and returns its export map (`L.tokenize`). `load("f.nl")` still dumps bindings into the current env.
 
 ## Builtins
@@ -56,7 +56,7 @@ match role { "admin" -> "H", _ -> "L" }
 
 ## Self-host
 Host is a stack VM. Compiler subset lives in `std/{lexer,parser,compile,compiler}.nl` (`evaluator.nl` is a debug tree-walk).
-`C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`.
+`C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. Host `Eval` and guest `nl_eval` agree on the language corpus. `env=null` => `copy(builtins())`.
 Last map in a module file is the export; otherwise all top-level names.
 CLI: `neurolang run` is the Go bootstrap frontend. `neurolang self` runs through `std/compiler` on the VM. `neurolang tools` / `neurolang mcp` expose the tool registry.
 Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
