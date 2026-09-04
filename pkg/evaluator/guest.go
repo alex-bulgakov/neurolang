@@ -7,7 +7,7 @@ import (
 )
 
 // stdCompiler is the export of std/compiler after the Go bootstrap load.
-// Later use/load compile modules with C.nl_eval instead of the Go frontend.
+// Later use/load run sibling .nlc or compile with C.nl_parse/nl_compile.
 var stdCompiler *object.Map
 
 // Guest is a booted std/compiler. The Go frontend loads std once;
@@ -81,7 +81,7 @@ func rememberCompiler(m *object.Map) {
 
 func useViaStd(src, resolved string) object.Object {
 	envMap := &object.Map{Pairs: make(map[string]object.Object)}
-	result := callStdEval(src, envMap, resolved)
+	result := evalModule(src, resolved, envMap, true)
 	if isError(result) {
 		return result
 	}
@@ -99,21 +99,34 @@ func loadViaStd(src, resolved string, env *object.Environment) object.Object {
 	prevFile, prevDir := env.File, env.Dir
 	env.File = resolved
 	env.Dir = filepath.Dir(resolved)
-	result := callStdEval(src, envMap, resolved)
+	result := evalModule(src, resolved, envMap, true)
 	env.File = prevFile
 	env.Dir = prevDir
 	return result
 }
 
-func callStdEval(src string, envMap *object.Map, resolved string) object.Object {
-	fn := stdCompiler.Pairs["nl_eval"]
+func evalModule(src, resolved string, envMap *object.Map, cache bool) object.Object {
+	bc := loadFreshNlc(resolved)
+	if bc == nil {
+		bc = compileModuleChunk(src)
+		if isError(bc) {
+			return bc
+		}
+		if cache {
+			writeNlc(resolved, bc)
+		}
+	}
+	return runModuleChunk(bc, resolved, envMap)
+}
+
+func runModuleChunk(bc object.Object, resolved string, envMap *object.Map) object.Object {
 	prev := activeEnv
 	tmp := object.NewEnvironment()
 	tmp.File = resolved
 	tmp.Dir = filepath.Dir(resolved)
 	activeEnv = tmp
 	defer func() { activeEnv = prev }()
-	return applyFunction(fn, []object.Object{&object.String{Value: src}, envMap})
+	return vmRun(bc, envMap)
 }
 
 func exportMap(m *object.Map) *object.Map {

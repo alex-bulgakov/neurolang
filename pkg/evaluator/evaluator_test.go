@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func testEval(input string) object.Object {
@@ -501,6 +502,50 @@ func TestStdBytecodeCache(t *testing.T) {
 		t.Fatalf("cached eval: %s", v.Inspect())
 	}
 	testIntegerObject(t, v, 25)
+
+	g3, errObj := BootGuest()
+	if g3 == nil {
+		t.Fatalf("BootGuest for use nlc: %s", FormatErr(errObj))
+	}
+	ident := g3.Eval(`
+L = use "std/lexer"
+L.tokenize("a = 1")[0].type
+`, nil)
+	if isError(ident) {
+		t.Fatalf("use nlc: %s", ident.Inspect())
+	}
+	s, ok := ident.(*object.String)
+	if !ok || s.Value != "IDENT" {
+		t.Fatalf("use nlc: got %s", inspectParity(ident))
+	}
+
+	dir := t.TempDir()
+	mod := filepath.Join(dir, "mod.nl")
+	if err := os.WriteFile(mod, []byte("answer = 41 + 1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	modSlash := filepath.ToSlash(mod)
+	got := g3.Eval("M = use \""+modSlash+"\"\nM.answer", nil)
+	if isError(got) {
+		t.Fatalf("use temp module: %s", got.Inspect())
+	}
+	testIntegerObject(t, got, 42)
+	nlc := nlcPath(mod)
+	if _, err := os.Stat(nlc); err != nil {
+		t.Fatalf("expected module nlc: %v", err)
+	}
+	if err := os.WriteFile(mod, []byte("!!!\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(nlc, later, later); err != nil {
+		t.Fatal(err)
+	}
+	got = g3.Eval("M = use \""+modSlash+"\"\nM.answer", nil)
+	if isError(got) {
+		t.Fatalf("use stale source via nlc: %s", got.Inspect())
+	}
+	testIntegerObject(t, got, 42)
 }
 
 func TestGuestUseModule(t *testing.T) {

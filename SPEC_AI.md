@@ -35,7 +35,7 @@ Blocks `{S*}` are expressions (value = last S). Map vs block: `{k:v}` if first p
 
 ## Eval
 Dynamic types: int float bool str null list map fn. `==` deep. `&&` `||` short-circuit. Infix does not cross newline except `| ?? && || + - * /`.
-Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module in a fresh env and returns its export map (`L.tokenize`). `load("f.nl")` still dumps bindings into the current env.
+Assign mutates ident / `obj.field` / `obj[k]`. `use "std/lexer"` loads a module in a fresh env and returns its export map (`L.tokenize`); after boot, sibling `.nlc` is `vm_run` when newer than source. `load("f.nl")` still dumps bindings into the current env.
 
 ## Builtins
 `len keys values range append slice split join ord chr is_digit is_alpha is_space`
@@ -57,7 +57,7 @@ match role { "admin" -> "H", _ -> "L" }
 ## Self-host
 Host is a stack VM. Compiler subset lives in `std/{lexer,parser,compile,compiler}.nl` (`evaluator.nl` is a debug tree-walk).
 `C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. Host `Eval` and guest `nl_eval` agree on the language corpus. `env=null` => `copy(builtins())`. Guest parse+compile of `std/{lexer,parser,compile,compiler}.nl` yields bytecode that runs on the VM.
-Last map in a module file is the export; otherwise all top-level names. After `std/compiler` is booted, `use`/`load` compile the module with `C.nl_eval`; the first load of `std/compiler` is still Go. Fresh `std/{lexer,parser,compile}.nlc` skips that Go load: `vm_run` the chunks and glue `compiler.nl` without the `use` lines.
+Last map in a module file is the export; otherwise all top-level names. After `std/compiler` is booted, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source, otherwise compile with `C.nl_parse`/`nl_compile` and write `.nlc`. The first load of `std/compiler` is still Go. Fresh `std/{lexer,parser,compile}.nlc` skips that Go load: `vm_run` the chunks and glue `compiler.nl` without the `use` lines.
 CLI: `neurolang run` / `eval` / `repl` boot `std/compiler` then `C.nl_eval` (`self` is an alias of `run`). Fresh `std/*.nlc` skips the Go load. `neurolang tools` / `neurolang mcp` expose the tool registry.
 Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 

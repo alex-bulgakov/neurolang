@@ -131,20 +131,102 @@ func writeStdCache(host *object.Environment, stdDir string) {
 		if err != nil {
 			return
 		}
-		ast := applyFunction(parse, []object.Object{&object.String{Value: string(data)}})
-		if isError(ast) {
-			return
-		}
-		bc := applyFunction(compile, []object.Object{ast})
+		bc := compileModuleChunk(string(data))
 		if isError(bc) {
 			return
 		}
-		raw, err := encodeChunkJSON(bc)
-		if err != nil {
-			return
-		}
-		_ = os.WriteFile(filepath.Join(stdDir, name+".nlc"), raw, 0644)
+		writeNlc(filepath.Join(stdDir, name+".nl"), bc)
 	}
+}
+
+func nlcPath(nlPath string) string {
+	if strings.HasSuffix(nlPath, ".nl") {
+		return strings.TrimSuffix(nlPath, ".nl") + ".nlc"
+	}
+	return nlPath + ".nlc"
+}
+
+func loadFreshNlc(nlPath string) object.Object {
+	nlc := nlcPath(nlPath)
+	stSrc, err1 := os.Stat(nlPath)
+	stNlc, err2 := os.Stat(nlc)
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	if stNlc.ModTime().Before(stSrc.ModTime()) {
+		return nil
+	}
+	data, err := os.ReadFile(nlc)
+	if err != nil {
+		return nil
+	}
+	obj, err := decodeChunkJSON(data)
+	if err != nil {
+		return nil
+	}
+	return obj
+}
+
+func writeNlc(nlPath string, bc object.Object) {
+	raw, err := encodeChunkJSON(bc)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(nlcPath(nlPath), raw, 0644)
+}
+
+func compileModuleChunk(src string) object.Object {
+	if stdCompiler == nil {
+		return newError("std compiler is not booted")
+	}
+	parse := stdCompiler.Pairs["nl_parse"]
+	compile := stdCompiler.Pairs["nl_compile"]
+	if parse == nil || compile == nil {
+		return newError("std compiler is missing nl_parse/nl_compile")
+	}
+	ast := applyFunction(parse, []object.Object{&object.String{Value: src}})
+	if isError(ast) {
+		return ast
+	}
+	if errObj := moduleParseErr(ast); errObj != nil {
+		return errObj
+	}
+	bc := applyFunction(compile, []object.Object{ast})
+	if isError(bc) {
+		return bc
+	}
+	return bc
+}
+
+func moduleParseErr(ast object.Object) object.Object {
+	m, ok := ast.(*object.Map)
+	if !ok {
+		return nil
+	}
+	stmts, ok := m.Pairs["statements"].(*object.List)
+	if !ok || len(stmts.Elements) == 0 {
+		return nil
+	}
+	first, ok := stmts.Elements[0].(*object.Map)
+	if !ok {
+		return nil
+	}
+	t, _ := first.Pairs["type"].(*object.String)
+	if t == nil || t.Value != "Err" {
+		return nil
+	}
+	msg := ""
+	if s, ok := first.Pairs["msg"].(*object.String); ok {
+		msg = s.Value
+	}
+	line, col := 0, 0
+	if n, ok := first.Pairs["line"].(*object.Integer); ok {
+		line = int(n.Value)
+	}
+	if n, ok := first.Pairs["col"].(*object.Integer); ok {
+		col = int(n.Value)
+	}
+	return newError("%s", FormatErr(ErrMap(msg, line, col)))
 }
 
 func encodeChunkJSON(obj object.Object) ([]byte, error) {
