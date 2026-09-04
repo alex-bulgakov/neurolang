@@ -55,11 +55,11 @@ match role { "admin" -> "H", _ -> "L" }
 ```
 
 ## Self-host
-Host is a stack VM (bytecode). Compiler subset lives in `std/{lexer,parser,evaluator,compile,compiler}.nl`.
-`C = use "std/compiler"` then `C.nl_eval(code, env)` (tree-walk guest) or `vm_run(C.nl_compile(ast), env)` (bytecode).
-`env=null` => `copy(builtins())`. Last map in a module file is the export; otherwise all top-level names.
-CLI: `neurolang run` executes on the VM. `neurolang self` runs through `std/compiler`. `neurolang tools` prints the effect catalog. `neurolang mcp` is stdio JSON-RPC (`tools/list`, `tools/call`) over the same registry. Parse errors are `{type:"Err", msg, line, col}`.
-`!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
+Host is a stack VM. Compiler subset lives in `std/{lexer,parser,compile,compiler}.nl` (`evaluator.nl` is a debug tree-walk).
+`C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`.
+Last map in a module file is the export; otherwise all top-level names.
+CLI: `neurolang run` is the Go bootstrap frontend. `neurolang self` runs through `std/compiler` on the VM. `neurolang tools` / `neurolang mcp` expose the tool registry.
+Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation
 No `def/function/class/import`. Prefer `| ? @` over loops. Short names. Omit types.

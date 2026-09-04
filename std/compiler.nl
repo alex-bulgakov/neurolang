@@ -1,10 +1,11 @@
 # ==========================================================
-# std/compiler.nl — self-hosted frontend: tokenize, parse, eval
+# std/compiler.nl — self-hosted frontend: tokenize, parse, compile
+# Guest eval runs on the host stack VM (vm_run), not tree-walk.
+# std/evaluator.nl remains as an AST interpreter for debugging.
 # ==========================================================
 
 L = use "lexer.nl"
 P = use "parser.nl"
-E = use "evaluator.nl"
 K = use "compile.nl"
 
 nl_eval = (code, env) -> {
@@ -12,7 +13,11 @@ nl_eval = (code, env) -> {
     env = copy(builtins())
   }
   ast = P.parse_program(L.tokenize(code))
-  E.unwrap(E.eval_ast(ast, env, null))
+  if len(ast.statements) > 0 && ast.statements[0].type == "Err" {
+    e = ast.statements[0]
+    return {err: e.msg, line: e.line, col: e.col}
+  }
+  vm_run(K.compile_program(ast), env)
 }
 
 nl_parse = code -> P.parse_program(L.tokenize(code))

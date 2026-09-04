@@ -2,7 +2,7 @@
 # 05_meta_circular.nl — self-hosted compiler proving ground
 # ==========================================================
 
-print("=== NeuroLang v0.6 self-hosted compiler ===")
+print("=== NeuroLang v0.8 self-hosted compiler ===")
 
 C = use "std/compiler"
 L = use "std/lexer"

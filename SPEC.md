@@ -27,7 +27,7 @@ Identifiers: `[A-Za-z_$][A-Za-z0-9_]*`.
 
 Keywords: `true false null if else match while for in break continue return use`.
 
-Two-character operators: `== != <= >= && || ->`.
+Two-character operators: `== != <= >= && || -> ??`.
 
 One-character operators / combinators: `= + - * / % | ? @ & ! . , : ; ( ) [ ] { }`.
 
@@ -51,7 +51,7 @@ A program is a sequence of statements. The value of a program is the value of it
 
 Precedence, tightest last:
 
-`\|` → `\|\|` → `&&` → `in` / comparisons → `+ -` → `* / %` → prefix `- !` → call / index / `.field`
+`??` → `\|` → `\|\|` → `&&` → `in` / comparisons → `+ -` → `* / %` → prefix `- !` → call / index / `.field`
 
 ### 4.1 Dataflow combinators
 
@@ -116,16 +116,15 @@ Tools (effects): `http.get` `http.post` `fs.list` `fs.read` `fs.write` `env.get`
 Go host (stack VM)  --use-->  std/compiler.nl
                                  |-- use lexer.nl
                                  |-- use parser.nl
-                                 |-- use evaluator.nl
                                  |-- use compile.nl
                                      |
                                      v
-                    C.nl_eval / C.nl_parse / C.nl_compile
+              C.nl_eval = parse + compile + vm_run
 ```
 
-`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Closures in the guest evaluator are maps `{__fn, params, body, env, dot}`; bytecode closures are `{__bc, code, consts, names, params}`.
+`C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the guest eval path.
 
-`neurolang run` / `eval` / `repl` compile Go AST to bytecode and execute on the VM. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
+`neurolang run` / `eval` / `repl` still compile **Go AST** to bytecode (bootstrap). `neurolang self` is `C.nl_eval` on the VM. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 
