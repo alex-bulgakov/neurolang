@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"neurolang/pkg/ast"
 	"sort"
 	"strings"
 )
@@ -12,19 +11,19 @@ import (
 type ObjectType string
 
 const (
-	INTEGER_OBJ      = "INTEGER"
-	FLOAT_OBJ        = "FLOAT"
-	BOOLEAN_OBJ      = "BOOLEAN"
-	STRING_OBJ       = "STRING"
-	NULL_OBJ         = "NULL"
+	INTEGER_OBJ         = "INTEGER"
+	FLOAT_OBJ           = "FLOAT"
+	BOOLEAN_OBJ         = "BOOLEAN"
+	STRING_OBJ          = "STRING"
+	NULL_OBJ            = "NULL"
 	RETURN_VALUE_OBJ    = "RETURN_VALUE"
 	BREAK_SIGNAL_OBJ    = "BREAK_SIGNAL"
 	CONTINUE_SIGNAL_OBJ = "CONTINUE_SIGNAL"
 	ERROR_OBJ           = "ERROR"
-	FUNCTION_OBJ     = "FUNCTION"
-	BUILTIN_OBJ      = "BUILTIN"
-	LIST_OBJ         = "LIST"
-	MAP_OBJ          = "MAP"
+	FUNCTION_OBJ        = "FUNCTION"
+	BUILTIN_OBJ         = "BUILTIN"
+	LIST_OBJ            = "LIST"
+	MAP_OBJ             = "MAP"
 )
 
 type Object interface {
@@ -38,66 +37,66 @@ type Integer struct {
 	Value int64
 }
 
-func (i *Integer) Type() ObjectType   { return INTEGER_OBJ }
-func (i *Integer) Inspect() string    { return fmt.Sprintf("%d", i.Value) }
-func (i *Integer) ToInterface() any   { return i.Value }
+func (i *Integer) Type() ObjectType { return INTEGER_OBJ }
+func (i *Integer) Inspect() string  { return fmt.Sprintf("%d", i.Value) }
+func (i *Integer) ToInterface() any { return i.Value }
 
 // Float
 type Float struct {
 	Value float64
 }
 
-func (f *Float) Type() ObjectType   { return FLOAT_OBJ }
-func (f *Float) Inspect() string    { return fmt.Sprintf("%g", f.Value) }
-func (f *Float) ToInterface() any   { return f.Value }
+func (f *Float) Type() ObjectType { return FLOAT_OBJ }
+func (f *Float) Inspect() string  { return fmt.Sprintf("%g", f.Value) }
+func (f *Float) ToInterface() any { return f.Value }
 
 // Boolean
 type Boolean struct {
 	Value bool
 }
 
-func (b *Boolean) Type() ObjectType   { return BOOLEAN_OBJ }
-func (b *Boolean) Inspect() string    { return fmt.Sprintf("%t", b.Value) }
-func (b *Boolean) ToInterface() any   { return b.Value }
+func (b *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
+func (b *Boolean) Inspect() string  { return fmt.Sprintf("%t", b.Value) }
+func (b *Boolean) ToInterface() any { return b.Value }
 
 // Null
 type Null struct{}
 
-func (n *Null) Type() ObjectType   { return NULL_OBJ }
-func (n *Null) Inspect() string    { return "null" }
-func (n *Null) ToInterface() any   { return nil }
+func (n *Null) Type() ObjectType { return NULL_OBJ }
+func (n *Null) Inspect() string  { return "null" }
+func (n *Null) ToInterface() any { return nil }
 
 // String
 type String struct {
 	Value string
 }
 
-func (s *String) Type() ObjectType   { return STRING_OBJ }
-func (s *String) Inspect() string    { return fmt.Sprintf("%q", s.Value) }
-func (s *String) ToInterface() any   { return s.Value }
+func (s *String) Type() ObjectType { return STRING_OBJ }
+func (s *String) Inspect() string  { return fmt.Sprintf("%q", s.Value) }
+func (s *String) ToInterface() any { return s.Value }
 
 // ReturnValue
 type ReturnValue struct {
 	Value Object
 }
 
-func (rv *ReturnValue) Type() ObjectType   { return RETURN_VALUE_OBJ }
-func (rv *ReturnValue) Inspect() string    { return rv.Value.Inspect() }
-func (rv *ReturnValue) ToInterface() any   { return rv.Value.ToInterface() }
+func (rv *ReturnValue) Type() ObjectType { return RETURN_VALUE_OBJ }
+func (rv *ReturnValue) Inspect() string  { return rv.Value.Inspect() }
+func (rv *ReturnValue) ToInterface() any { return rv.Value.ToInterface() }
 
 // BreakSignal
 type BreakSignal struct{}
 
-func (bs *BreakSignal) Type() ObjectType   { return BREAK_SIGNAL_OBJ }
-func (bs *BreakSignal) Inspect() string    { return "break" }
-func (bs *BreakSignal) ToInterface() any   { return "break" }
+func (bs *BreakSignal) Type() ObjectType { return BREAK_SIGNAL_OBJ }
+func (bs *BreakSignal) Inspect() string  { return "break" }
+func (bs *BreakSignal) ToInterface() any { return "break" }
 
 // ContinueSignal
 type ContinueSignal struct{}
 
-func (cs *ContinueSignal) Type() ObjectType   { return CONTINUE_SIGNAL_OBJ }
-func (cs *ContinueSignal) Inspect() string    { return "continue" }
-func (cs *ContinueSignal) ToInterface() any   { return "continue" }
+func (cs *ContinueSignal) Type() ObjectType { return CONTINUE_SIGNAL_OBJ }
+func (cs *ContinueSignal) Inspect() string  { return "continue" }
+func (cs *ContinueSignal) ToInterface() any { return "continue" }
 
 // Error
 type Error struct {
@@ -133,28 +132,6 @@ func (e *Error) AsMap() *Map {
 	return &Map{Pairs: pairs}
 }
 
-// Function
-type Function struct {
-	Parameters []*ast.Identifier
-	Body       ast.Expression
-	Env        *Environment
-}
-
-func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
-func (f *Function) Inspect() string {
-	var out bytes.Buffer
-	params := []string{}
-	for _, p := range f.Parameters {
-		params = append(params, p.String())
-	}
-	out.WriteString("(")
-	out.WriteString(strings.Join(params, ", "))
-	out.WriteString(") -> ")
-	out.WriteString(f.Body.String())
-	return out.String()
-}
-func (f *Function) ToInterface() any { return f.Inspect() }
-
 // BuiltinFunction
 type BuiltinFunction func(args ...Object) Object
 
@@ -162,9 +139,9 @@ type Builtin struct {
 	Fn BuiltinFunction
 }
 
-func (b *Builtin) Type() ObjectType   { return BUILTIN_OBJ }
-func (b *Builtin) Inspect() string    { return "builtin function" }
-func (b *Builtin) ToInterface() any   { return "builtin" }
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }
+func (b *Builtin) ToInterface() any { return "builtin" }
 
 // List
 type List struct {

@@ -2,10 +2,7 @@ package evaluator
 
 import (
 	"fmt"
-	"neurolang/pkg/ast"
-	"neurolang/pkg/lexer"
 	"neurolang/pkg/object"
-	"neurolang/pkg/parser"
 	"neurolang/pkg/tools"
 	"os"
 	"path/filepath"
@@ -19,17 +16,6 @@ var (
 	FALSE     = &object.Boolean{Value: false}
 	activeEnv *object.Environment
 )
-
-func Eval(node ast.Node, env *object.Environment) object.Object {
-	prev := activeEnv
-	activeEnv = env
-	defer func() { activeEnv = prev }()
-	ch, err := compile(node)
-	if err != nil {
-		return newError("%s", err.Error())
-	}
-	return run(ch, env)
-}
 
 func collectIterable(iterable object.Object) ([]object.Object, *object.Error) {
 	switch it := iterable.(type) {
@@ -514,29 +500,10 @@ func UseModule(path string, from *object.Environment) object.Object {
 		return newError("use: %s", err.Error())
 	}
 	src := string(data)
-	if runningStd && stdCompiler != nil {
-		return useViaStd(src, resolved)
+	if stdCompiler == nil {
+		return newError("use: std compiler is not booted")
 	}
-	return useViaGo(src, resolved)
-}
-
-func useViaGo(src, resolved string) object.Object {
-	prog, perr := parseSource(src, resolved)
-	if perr != nil {
-		return perr
-	}
-	modEnv := object.NewEnvironment()
-	modEnv.File = resolved
-	modEnv.Dir = filepath.Dir(resolved)
-	result := Eval(prog, modEnv)
-	if isError(result) {
-		return result
-	}
-	if m, ok := result.(*object.Map); ok {
-		rememberCompiler(m)
-		return m
-	}
-	return exportBindings(modEnv)
+	return useViaStd(src, resolved)
 }
 
 func LoadInto(path string, env *object.Environment) object.Object {
@@ -549,41 +516,10 @@ func LoadInto(path string, env *object.Environment) object.Object {
 		return newError("load error: %s", err.Error())
 	}
 	src := string(data)
-	if runningStd && stdCompiler != nil {
-		return loadViaStd(src, resolved, env)
+	if stdCompiler == nil {
+		return newError("load: std compiler is not booted")
 	}
-	prog, perr := parseSource(src, resolved)
-	if perr != nil {
-		return perr
-	}
-	prevFile, prevDir := env.File, env.Dir
-	env.File = resolved
-	env.Dir = filepath.Dir(resolved)
-	result := Eval(prog, env)
-	env.File = prevFile
-	env.Dir = prevDir
-	return result
-}
-
-func parseSource(source, filename string) (*ast.Program, *object.Error) {
-	l := lexer.New(source)
-	p := parser.New(l)
-	prog := p.ParseProgram()
-	if len(p.Errors()) > 0 {
-		return nil, newError("%s: %s", filename, p.Errors()[0])
-	}
-	return prog, nil
-}
-
-func exportBindings(env *object.Environment) *object.Map {
-	pairs := make(map[string]object.Object)
-	for k, v := range env.Bindings() {
-		if strings.HasPrefix(k, "__") {
-			continue
-		}
-		pairs[k] = v
-	}
-	return &object.Map{Pairs: pairs}
+	return loadViaStd(src, resolved, env)
 }
 
 func ErrMap(msg string, line, col int) *object.Map {

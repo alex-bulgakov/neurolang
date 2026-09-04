@@ -2,24 +2,53 @@ package evaluator
 
 import (
 	"fmt"
-	"neurolang/pkg/lexer"
 	"neurolang/pkg/object"
-	"neurolang/pkg/parser"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func testEval(input string) object.Object {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-	if len(p.Errors()) > 0 {
-		panic(p.Errors()[0])
+var testGuest *Guest
+
+func TestMain(m *testing.M) {
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	env := object.NewEnvironment()
-	return Eval(program, env)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			fmt.Fprintln(os.Stderr, "go.mod not found")
+			os.Exit(1)
+		}
+		dir = parent
+	}
+	if err := os.Chdir(dir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	g, errObj := BootGuest()
+	if g == nil {
+		fmt.Fprintf(os.Stderr, "BootGuest: %s\n", FormatErr(errObj))
+		os.Exit(1)
+	}
+	testGuest = g
+	os.Exit(m.Run())
+}
+
+func testEval(input string) object.Object {
+	env := testGuest.NewEnv()
+	if m, ok := env.(*object.Map); ok {
+		if c, ok := testGuest.host.Get("C"); ok {
+			m.Pairs["C"] = c
+		}
+	}
+	return testGuest.Eval(input, env)
 }
 
 func TestIntegerExpression(t *testing.T) {
@@ -297,7 +326,6 @@ func TestMetaCircularSelfHost(t *testing.T) {
 	defer os.Chdir(old)
 
 	input := `
-C = use "std/compiler"
 a = C.nl_eval("[10, 20, 30, 40] | ?(. > 15) | @(. * 2)", null)
 b = C.nl_eval("square = n -> n * n\nsquare(8)", null)
 c = C.nl_eval("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc", null)
@@ -352,7 +380,6 @@ func TestSelfHostedParseError(t *testing.T) {
 	defer os.Chdir(old)
 
 	evaluated := testEval(`
-C = use "std/compiler"
 ast = C.nl_parse(")\n")
 n = ast.statements[0]
 [n.type, n.line, n.col]
@@ -393,7 +420,6 @@ func TestDogfoodStdParse(t *testing.T) {
 	defer os.Chdir(old)
 
 	evaluated := testEval(`
-C = use "std/compiler"
 lex_ast = C.nl_parse(!fs.read("std/lexer.nl"))
 par_ast = C.nl_parse(!fs.read("std/parser.nl"))
 lex_ok = len(lex_ast.statements) > 0 && lex_ast.statements[0].type != "Err"
@@ -424,8 +450,6 @@ func TestDogfoodStdCompile(t *testing.T) {
 	defer os.Chdir(old)
 
 	evaluated := testEval(`
-C = use "std/compiler"
-
 compile_file = path -> {
   src = !fs.read(path)
   ast = C.nl_parse(src)
@@ -477,14 +501,6 @@ func TestStdBytecodeCache(t *testing.T) {
 	stdDir, err := stdDirPath()
 	if err != nil {
 		t.Fatal(err)
-	}
-	for _, name := range stdNlcNames {
-		_ = os.Remove(filepath.Join(stdDir, name+".nlc"))
-	}
-
-	g, errObj := BootGuest()
-	if g == nil {
-		t.Fatalf("first BootGuest: %s", FormatErr(errObj))
 	}
 	for _, name := range stdNlcNames {
 		if _, err := os.Stat(filepath.Join(stdDir, name+".nlc")); err != nil {
@@ -546,6 +562,47 @@ L.tokenize("a = 1")[0].type
 		t.Fatalf("use stale source via nlc: %s", got.Inspect())
 	}
 	testIntegerObject(t, got, 42)
+}
+
+func TestBootRequiresNlc(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	stdDir, err := stdDirPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := stdCompiler
+	var moved []string
+	for _, name := range stdNlcNames {
+		p := filepath.Join(stdDir, name+".nlc")
+		bak := p + ".bak"
+		if err := os.Rename(p, bak); err != nil {
+			t.Fatal(err)
+		}
+		moved = append(moved, p)
+	}
+	defer func() {
+		for _, p := range moved {
+			_ = os.Rename(p+".bak", p)
+		}
+		stdCompiler = prev
+	}()
+	stdCompiler = nil
+	g, errObj := BootGuest()
+	if g != nil {
+		t.Fatal("expected BootGuest to fail without std/*.nlc")
+	}
+	if errObj == nil {
+		t.Fatal("expected an error")
+	}
 }
 
 func TestStaleNlcRebuildViaGuest(t *testing.T) {
@@ -674,7 +731,6 @@ func TestNLCompileVMRun(t *testing.T) {
 	defer os.Chdir(old)
 
 	evaluated := testEval(`
-C = use "std/compiler"
 bc = C.nl_compile(C.nl_parse("acc = 0\nfor n in [1, 2, 3] {\n  acc = acc + n\n}\nacc"))
 vm_run(bc, copy(builtins()))
 `)
@@ -684,7 +740,7 @@ vm_run(bc, copy(builtins()))
 	testIntegerObject(t, evaluated, 6)
 }
 
-func TestHostGuestParity(t *testing.T) {
+func TestGuestCorpus(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()
 	if err != nil {
@@ -694,11 +750,6 @@ func TestHostGuestParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chdir(old)
-
-	boot := object.NewEnvironment()
-	if v := evalSource(`C = use "std/compiler"`, boot); isError(v) {
-		t.Fatalf("boot compiler: %s", v.Inspect())
-	}
 
 	cases := []string{
 		`5 + 2 * 10`,
@@ -779,36 +830,14 @@ toks[0].type
 	for i, src := range cases {
 		name := fmt.Sprintf("%d", i)
 		t.Run(name, func(t *testing.T) {
-			host := testEval(src)
-			boot.Set("__src", &object.String{Value: src})
-			guest := evalSource(`C.nl_eval(__src, null)`, boot)
-			if !parityOK(host, guest) {
-				t.Errorf("host=%s\nguest=%s\nsrc:\n%s", inspectParity(host), inspectParity(guest), src)
+			v := testEval(src)
+			gotErr := isError(v) || IsErrMap(v)
+			wantErr := src == `no_such_ident` || src == `must({err: "x"})`
+			if gotErr != wantErr {
+				t.Errorf("err=%v wantErr=%v got %s\nsrc:\n%s", gotErr, wantErr, inspectParity(v), src)
 			}
 		})
 	}
-}
-
-func evalSource(code string, env *object.Environment) object.Object {
-	l := lexer.New(code)
-	p := parser.New(l)
-	prog := p.ParseProgram()
-	if len(p.Errors()) > 0 {
-		return newError("%s", p.Errors()[0])
-	}
-	return Eval(prog, env)
-}
-
-func parityOK(host, guest object.Object) bool {
-	hostErr := isError(host) || IsErrMap(host)
-	guestErr := isError(guest) || IsErrMap(guest)
-	if hostErr || guestErr {
-		return hostErr && guestErr
-	}
-	if host == nil || guest == nil {
-		return host == guest
-	}
-	return host.Inspect() == guest.Inspect()
 }
 
 func inspectParity(v object.Object) string {

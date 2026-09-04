@@ -6,43 +6,39 @@ import (
 	"strings"
 )
 
-// stdCompiler is the export of std/compiler after the Go bootstrap load.
-// Later use/load run sibling .nlc or compile with C.nl_parse/nl_compile.
+// stdCompiler is the export of std/compiler after boot from std/*.nlc.
 var stdCompiler *object.Map
 
-// Guest is a booted std/compiler. Existing std/*.nlc boot with vm_run;
-// stale chunks are rebuilt by the guest compiler. Go loads std/compiler
-// only when the cache files are missing.
+// Guest is a booted std/compiler. Boot is vm_run of committed std/*.nlc.
+// Stale chunks are rebuilt by the guest compiler. There is no Go frontend.
 type Guest struct {
 	host *object.Environment
 }
 
 func BootGuest() (*Guest, object.Object) {
-	host := object.NewEnvironment()
 	stdDir, err := stdDirPath()
-	if err == nil && cachePresent(stdDir) {
-		if g := bootFromCache(host, stdDir); g != nil {
-			if !cacheFresh(stdDir) {
-				writeStdCache(g.host, stdDir)
-				if cacheFresh(stdDir) {
-					stdCompiler = nil
-					host2 := object.NewEnvironment()
-					if g2 := bootFromCache(host2, stdDir); g2 != nil {
-						return g2, nil
-					}
-				}
+	if err != nil {
+		return nil, newError("std/compiler not found: %s", err.Error())
+	}
+	if !cachePresent(stdDir) {
+		return nil, newError("missing std/*.nlc; stage-0 bytecode is required to boot")
+	}
+	host := object.NewEnvironment()
+	g := bootFromCache(host, stdDir)
+	if g == nil {
+		return nil, newError("failed to boot from std/*.nlc")
+	}
+	if !cacheFresh(stdDir) {
+		writeStdCache(g.host, stdDir)
+		if cacheFresh(stdDir) {
+			stdCompiler = nil
+			host2 := object.NewEnvironment()
+			if g2 := bootFromCache(host2, stdDir); g2 != nil {
+				return g2, nil
 			}
-			return g, nil
 		}
 	}
-	v := evalString(`C = use "std/compiler"`, host)
-	if isError(v) {
-		return nil, v
-	}
-	if err == nil {
-		writeStdCache(host, stdDir)
-	}
-	return &Guest{host: host}, nil
+	return g, nil
 }
 
 func (g *Guest) BindScript(path string) {
@@ -78,14 +74,6 @@ func (g *Guest) Eval(code string, env object.Object) object.Object {
 		env = NULL
 	}
 	return applyFunction(fn, []object.Object{&object.String{Value: code}, env})
-}
-
-func evalString(code string, env *object.Environment) object.Object {
-	prog, errObj := parseSource(code, "nl")
-	if errObj != nil {
-		return errObj
-	}
-	return Eval(prog, env)
 }
 
 func rememberCompiler(m *object.Map) {
@@ -128,13 +116,16 @@ func loadViaStd(src, resolved string, env *object.Environment) object.Object {
 }
 
 func evalModule(src, resolved string, envMap *object.Map, cache bool) object.Object {
-	bc := loadFreshNlc(resolved)
+	var bc object.Object
+	if filepath.Base(resolved) != "compiler.nl" {
+		bc = loadFreshNlc(resolved)
+	}
 	if bc == nil {
 		bc = compileModuleChunk(src)
 		if isError(bc) {
 			return bc
 		}
-		if cache {
+		if cache && filepath.Base(resolved) != "compiler.nl" {
 			writeNlc(resolved, bc)
 		}
 	}
