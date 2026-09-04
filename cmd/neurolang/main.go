@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"neurolang/pkg/evaluator"
-	"neurolang/pkg/lexer"
 	"neurolang/pkg/mcp"
 	"neurolang/pkg/object"
-	"neurolang/pkg/parser"
 	"neurolang/pkg/tokenmetrics"
 	"neurolang/pkg/tools"
 	"os"
@@ -15,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.10.0"
+const Version = "0.11.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -55,7 +53,7 @@ func main() {
 			fmt.Println("Usage: neurolang self <file.nl>")
 			os.Exit(1)
 		}
-		runSelfHosted(os.Args[2])
+		runFile(os.Args[2])
 
 	case "spec":
 		printSpec()
@@ -92,8 +90,8 @@ func printHelp() {
 	fmt.Printf(`NeuroLang v%s - AI-Native Programming Language & Runtime
 
 Usage:
-  neurolang run <file.nl>     Execute a NeuroLang script (stack VM)
-  neurolang self <file.nl>    Execute via the self-hosted compiler (std/*.nl)
+  neurolang run <file.nl>     Execute a script (boots std/compiler, then VM)
+  neurolang self <file.nl>    Alias of run
   neurolang eval "<code>"     Evaluate a one-line expression
   neurolang repl              Launch interactive REPL session
   neurolang stats <file.nl>   Analyze token footprint and efficiency
@@ -117,10 +115,29 @@ AI Combinators & Syntax Overview:
 
 Examples:
   neurolang run examples/01_basics.nl
-  neurolang self examples/01_basics.nl
   neurolang eval "[1, 2, 3, 4] | ?(. > 2) | @(. * 10)"
   neurolang spec
 `, Version)
+}
+
+func bootGuest() *evaluator.Guest {
+	g, err := evaluator.BootGuest()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", evaluator.FormatErr(err))
+		os.Exit(1)
+	}
+	return g
+}
+
+func reportGuest(result object.Object, exitOnError bool) bool {
+	if evaluator.IsErrMap(result) {
+		fmt.Fprintf(os.Stderr, "%s\n", evaluator.FormatErr(result))
+		if exitOnError {
+			os.Exit(1)
+		}
+		return true
+	}
+	return false
 }
 
 func runFile(filename string) {
@@ -129,50 +146,9 @@ func runFile(filename string) {
 		fmt.Fprintf(os.Stderr, "Error reading file %s: %s\n", filename, err)
 		os.Exit(1)
 	}
-	execSource(string(bytes), object.NewEnvironment(), true)
-}
-
-func execSource(code string, env *object.Environment, exitOnError bool) object.Object {
-	l := lexer.New(code)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		fmt.Fprintf(os.Stderr, "Parse errors:\n")
-		for _, msg := range p.Errors() {
-			fmt.Fprintf(os.Stderr, "  - %s\n", msg)
-		}
-		if exitOnError {
-			os.Exit(1)
-		}
-		return nil
-	}
-
-	evaluated := evaluator.Eval(program, env)
-	if evaluated != nil && evaluated.Type() == object.ERROR_OBJ {
-		fmt.Fprintf(os.Stderr, "%s\n", evaluated.Inspect())
-		if exitOnError {
-			os.Exit(1)
-		}
-	}
-	return evaluated
-}
-
-func runSelfHosted(filename string) {
-	bytes, err := os.ReadFile(filename)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file %s: %s\n", filename, err)
-		os.Exit(1)
-	}
-
-	env := object.NewEnvironment()
-	execSource(`C = use "std/compiler"`, env, true)
-	env.Set("__src", &object.String{Value: string(bytes)})
-	result := execSource("C.nl_eval(__src, null)", env, true)
-	if evaluator.IsErrMap(result) {
-		fmt.Fprintf(os.Stderr, "%s\n", evaluator.FormatErr(result))
-		os.Exit(1)
-	}
+	g := bootGuest()
+	g.BindScript(filename)
+	reportGuest(g.Eval(string(bytes), nil), true)
 }
 
 func printSpec() {
@@ -204,20 +180,11 @@ func printToolCatalog() {
 }
 
 func evalCode(code string) {
-	env := object.NewEnvironment()
-	l := lexer.New(code)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		fmt.Fprintf(os.Stderr, "Parse errors:\n")
-		for _, msg := range p.Errors() {
-			fmt.Fprintf(os.Stderr, "  - %s\n", msg)
-		}
-		os.Exit(1)
+	g := bootGuest()
+	evaluated := g.Eval(code, nil)
+	if reportGuest(evaluated, true) {
+		return
 	}
-
-	evaluated := evaluator.Eval(program, env)
 	if evaluated != nil && evaluated != evaluator.NULL {
 		fmt.Println(evaluated.Inspect())
 	}
@@ -225,7 +192,8 @@ func evalCode(code string) {
 
 func startRepl() {
 	scanner := bufio.NewScanner(os.Stdin)
-	env := object.NewEnvironment()
+	g := bootGuest()
+	env := g.NewEnv()
 
 	fmt.Printf("NeuroLang REPL v%s\nType 'exit' or Ctrl+C to quit.\n\n", Version)
 
@@ -243,18 +211,10 @@ func startRepl() {
 			continue
 		}
 
-		l := lexer.New(line)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) > 0 {
-			for _, msg := range p.Errors() {
-				fmt.Printf("Error: %s\n", msg)
-			}
+		evaluated := g.Eval(line, env)
+		if reportGuest(evaluated, false) {
 			continue
 		}
-
-		evaluated := evaluator.Eval(program, env)
 		if evaluated != nil && evaluated != evaluator.NULL {
 			fmt.Println(evaluated.Inspect())
 		}

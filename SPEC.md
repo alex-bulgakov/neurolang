@@ -126,17 +126,17 @@ Go host (stack VM)  --use-->  std/compiler.nl
 
 `C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the guest eval path.
 
-`neurolang run` / `eval` / `repl` still compile **Go AST** to bytecode (bootstrap). `neurolang self` is `C.nl_eval` on the VM. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
+`neurolang run` / `eval` / `repl` boot **`std/compiler`** then `C.nl_eval` on the VM. The Go lexer/parser remain only to load `std/` (bootstrap). `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 
-- `neurolang run file.nl` — Go host (stack VM)
-- `neurolang self file.nl` — `use "std/compiler"` then `C.nl_eval`
+- `neurolang run file.nl` — boot `std/compiler`, then `C.nl_eval`
+- `neurolang self file.nl` — alias of `run`
 - `neurolang tools` — compact `!tool` catalog for models
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
-The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`; `vm_run` of the emitted lexer/parser/compile chunks tokenizes, parses, and compiles a program. `neurolang run` still uses the Go frontend (bootstrap). That is enough to grow the subset until the Go host is only a thin runtime.
+The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`; `vm_run` of the emitted lexer/parser/compile chunks tokenizes, parses, and compiles a program. User-facing `run` / `eval` / `repl` boot that stack; Go remains the loader for `std/`. That is enough to grow the subset until the Go host is only a thin runtime.
 
 ## 7. Generation rules for agents
 

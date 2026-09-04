@@ -1137,6 +1137,9 @@ func ResolveModulePath(path string, env *object.Environment) (string, error) {
 				dir = parent
 			}
 		}
+		if exe, err := os.Executable(); err == nil {
+			add(filepath.Join(filepath.Dir(exe), v))
+		}
 	}
 
 	seen := map[string]bool{}

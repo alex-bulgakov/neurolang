@@ -462,6 +462,42 @@ out = vm_run(K.compile_program(ast), copy(builtins()))
 	}
 }
 
+func TestGuestRunAndREPL(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	g, errObj := BootGuest()
+	if g == nil {
+		t.Fatalf("BootGuest: %s", FormatErr(errObj))
+	}
+
+	v := g.Eval("5 + 2 * 10", nil)
+	if isError(v) {
+		t.Fatalf("guest arith: %s", v.Inspect())
+	}
+	testIntegerObject(t, v, 25)
+
+	env := g.NewEnv()
+	if isError(env) {
+		t.Fatalf("NewEnv: %s", env.Inspect())
+	}
+	if v := g.Eval("x = 40", env); isError(v) {
+		t.Fatalf("bind: %s", v.Inspect())
+	}
+	v = g.Eval("x + 2", env)
+	if isError(v) {
+		t.Fatalf("repl persist: %s", v.Inspect())
+	}
+	testIntegerObject(t, v, 42)
+}
+
 func TestNLCompileVMRun(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()

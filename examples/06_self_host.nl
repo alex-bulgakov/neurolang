@@ -1,5 +1,5 @@
 # ==========================================================
-# 06_self_host.nl — run this file with: neurolang self examples/06_self_host.nl
+# 06_self_host.nl — neurolang run examples/06_self_host.nl
 # The Go host only bootstraps std/; this program is evaluated by NL-in-NL.
 # ==========================================================
 

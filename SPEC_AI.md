@@ -58,7 +58,7 @@ match role { "admin" -> "H", _ -> "L" }
 Host is a stack VM. Compiler subset lives in `std/{lexer,parser,compile,compiler}.nl` (`evaluator.nl` is a debug tree-walk).
 `C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. Host `Eval` and guest `nl_eval` agree on the language corpus. `env=null` => `copy(builtins())`. Guest parse+compile of `std/{lexer,parser,compile,compiler}.nl` yields bytecode that runs on the VM.
 Last map in a module file is the export; otherwise all top-level names.
-CLI: `neurolang run` is the Go bootstrap frontend. `neurolang self` runs through `std/compiler` on the VM. `neurolang tools` / `neurolang mcp` expose the tool registry.
+CLI: `neurolang run` / `eval` / `repl` boot `std/compiler` then `C.nl_eval` (`self` is an alias of `run`). Go lexer/parser remain only to load `std/`. `neurolang tools` / `neurolang mcp` expose the tool registry.
 Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation
