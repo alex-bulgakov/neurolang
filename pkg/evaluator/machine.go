@@ -15,11 +15,14 @@ func (it *iterator) Inspect() string         { return "<iter>" }
 func (it *iterator) ToInterface() any        { return nil }
 
 type machine struct {
-	ch   *chunk
-	ip   int
-	stack []object.Object
-	env  *object.Environment
+	ch      *chunk
+	ip      int
+	stack   []object.Object
+	env     *object.Environment
+	fromStd bool
 }
+
+var runningStd bool
 
 func run(ch *chunk, env *object.Environment) object.Object {
 	m := &machine{ch: ch, env: env}
@@ -27,6 +30,9 @@ func run(ch *chunk, env *object.Environment) object.Object {
 }
 
 func (m *machine) exec(ch *chunk, env *object.Environment) object.Object {
+	prevStd := runningStd
+	runningStd = m.fromStd
+	defer func() { runningStd = prevStd }()
 	ip := 0
 	code := ch.code
 	for ip < len(code) {
@@ -356,11 +362,16 @@ func (m *machine) apply(fn object.Object, args []object.Object, env *object.Envi
 				ex.Set(p, args[i])
 			}
 		}
-		res := run(f.ch, ex)
+		res := m.runClosure(f, ex)
 		return unwrapReturnValue(res)
 	default:
 		return applyFunction(fn, args)
 	}
+}
+
+func (m *machine) runClosure(f *vmClosure, ex *object.Environment) object.Object {
+	inner := &machine{ch: f.ch, env: ex, fromStd: m.fromStd}
+	return inner.exec(f.ch, ex)
 }
 
 func (m *machine) pipePred(left, pred object.Object, env *object.Environment, filter bool) object.Object {

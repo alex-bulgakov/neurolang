@@ -462,6 +462,35 @@ out = vm_run(K.compile_program(ast), copy(builtins()))
 	}
 }
 
+func TestGuestUseModule(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	g, errObj := BootGuest()
+	if g == nil {
+		t.Fatalf("BootGuest: %s", FormatErr(errObj))
+	}
+	v := g.Eval(`
+L = use "std/lexer"
+toks = L.tokenize("a = 1")
+toks[0].type
+`, nil)
+	if isError(v) {
+		t.Fatalf("guest use lexer: %s", v.Inspect())
+	}
+	s, ok := v.(*object.String)
+	if !ok || s.Value != "IDENT" {
+		t.Fatalf("expected IDENT, got %s", inspectParity(v))
+	}
+}
+
 func TestGuestRunAndREPL(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()

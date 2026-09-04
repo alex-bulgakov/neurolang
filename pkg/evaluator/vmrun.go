@@ -107,7 +107,8 @@ func vmRun(chunkObj object.Object, envObj object.Object) object.Object {
 		env.File = activeEnv.File
 		env.Dir = activeEnv.Dir
 	}
-	res := run(ch, env)
+	m := &machine{ch: ch, env: env, fromStd: true}
+	res := m.exec(ch, env)
 	if back != nil {
 		copyEnvToMap(env, back)
 	}

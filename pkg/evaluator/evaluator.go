@@ -1168,7 +1168,15 @@ func UseModule(path string, from *object.Environment) object.Object {
 	if err != nil {
 		return newError("use: %s", err.Error())
 	}
-	prog, perr := parseSource(string(data), resolved)
+	src := string(data)
+	if runningStd && stdCompiler != nil {
+		return useViaStd(src, resolved)
+	}
+	return useViaGo(src, resolved)
+}
+
+func useViaGo(src, resolved string) object.Object {
+	prog, perr := parseSource(src, resolved)
 	if perr != nil {
 		return perr
 	}
@@ -1180,6 +1188,7 @@ func UseModule(path string, from *object.Environment) object.Object {
 		return result
 	}
 	if m, ok := result.(*object.Map); ok {
+		rememberCompiler(m)
 		return m
 	}
 	return exportBindings(modEnv)
@@ -1194,7 +1203,11 @@ func LoadInto(path string, env *object.Environment) object.Object {
 	if err != nil {
 		return newError("load error: %s", err.Error())
 	}
-	prog, perr := parseSource(string(data), resolved)
+	src := string(data)
+	if runningStd && stdCompiler != nil {
+		return loadViaStd(src, resolved, env)
+	}
+	prog, perr := parseSource(src, resolved)
 	if perr != nil {
 		return perr
 	}
