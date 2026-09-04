@@ -2,7 +2,7 @@
 
 NeuroLang (NL) is an AI-native dataflow language: text that is cheap to generate and cheap to read for transformers, then executed by an independent runtime.
 
-The Go package in this repository is the **host** (stack VM, builtins, tools). The compiler lives in `std/` and ships as committed `std/*.nlc`. Language changes go in `std/`; a stale cache is rebuilt by the guest compiler. There is no Go lexer, parser, or bytecode compiler.
+The Go package in this repository is a **stage-0 host** (optional). The language runtime is `std/vm.nl` plus a small C kernel in `rt/` (`gcc rt/*.c`). The compiler lives in `std/` and ships as committed `std/*.nlc`. After `gcc -O2 -o neurolang rt/nl.c rt/main.c`, `neurolang` runs with no Go. Grow the language in `std/`; the C kernel stays for values, alloc, and syscalls until `std/emit_c.nl` AOT-compiles `std/vm.nl`.
 
 ## 1. Why this shape
 
@@ -116,12 +116,13 @@ Tools (effects): `http.get` `http.post` `fs.list` `fs.read` `fs.write` `env.get`
 
 ```
 std/{lexer,parser,compile,compiler}.nlc  --vm_run-->  C.nl_eval
-stale .nlc  --vm_run old chunks-->  guest nl_compile  --> write .nlc --> vm_run
+native: gcc rt/*.c  -->  same boot, no Go
+std/vm.nl              -->  VM written in NL (dogfood; AOT via emit_c next)
 ```
 
-`C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the eval path. The Go host is only the stack VM.
+`C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the eval path. `std/vm.nl` is the VM in NeuroLang. `rt/*.c` is the stage-0 native kernel (values, JSON `.nlc`, syscalls) so a binary does not need Go.
 
-`neurolang run` / `eval` / `repl` boot from committed `std/{lexer,parser,compile,compiler}.nlc`. `compiler.nlc` is the full module (`use` lexer/parser/compile); that `use` `vm_run`s sibling `.nlc` before `C` is bound. If `.nlc` are older than the `.nl` sources, the guest compiler rewrites them. Missing stage-0 `.nlc` is a boot error. Language tests live in `tests/*.nl`; `neurolang check` runs them. Grow the language by desugaring in `std/` onto existing opcodes; touch the Go VM only for a new opcode, builtin, or value kind. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
+`neurolang run` / `eval` / `repl` boot from committed `std/{lexer,parser,compile,compiler}.nlc`. `compiler.nlc` is the full module (`use` lexer/parser/compile); that `use` `vm_run`s sibling `.nlc` before `C` is bound. If `.nlc` are older than the `.nl` sources, the guest compiler rewrites them. Missing stage-0 `.nlc` is a boot error. Language tests live in `tests/*.nl`; `neurolang check` runs them. Native: `gcc -O2 -o neurolang rt/nl.c rt/main.c`. Grow the language by desugaring in `std/` onto existing opcodes. A new opcode/builtin/value kind is added in `std/vm.nl` and mirrored in `rt/` until emit_c AOTs the VM. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 
@@ -131,8 +132,9 @@ CLI:
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang check` — rebuild stale `std/*.nlc`, run `tests/*.nl`
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
+- native binary — `gcc -O2 -o neurolang rt/nl.c rt/main.c` (no Go)
 
-The self-hosted stack must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That corpus lives in `tests/*.nl` and runs on `C.nl_eval`. Grow syntax in `std/` by desugaring to existing bytecode. The Go host is the VM, builtins, and tools.
+The self-hosted stack must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That corpus lives in `tests/*.nl`. Grow syntax in `std/` by desugaring. `std/vm.nl` is the VM in NL; `rt/*.c` is the stage-0 kernel. Go is optional.
 
 ## 7. Generation rules for agents
 

@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.18.0"
+const Version = "0.19.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -100,9 +100,14 @@ Usage:
   neurolang stats <file.nl>   Analyze token footprint and efficiency
   neurolang check             Rebuild stale std/*.nlc and run tests/*.nl
   neurolang spec              Print the dense AI language spec
+  neurolang spec              Print the dense AI language spec
   neurolang tools             Compact tool catalog for models
   neurolang mcp               MCP stdio JSON-RPC (tools/list, tools/call)
   neurolang version           Show version
+
+Native (no Go):
+  gcc -O2 -o neurolang rt/nl.c rt/main.c
+
 
 AI Combinators & Syntax Overview:
   |                           Pipeline (x | f)
