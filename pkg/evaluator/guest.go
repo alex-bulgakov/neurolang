@@ -10,8 +10,8 @@ import (
 // Later use/load run sibling .nlc or compile with C.nl_parse/nl_compile.
 var stdCompiler *object.Map
 
-// Guest is a booted std/compiler. The Go frontend loads std once;
-// user code is parsed and compiled by NeuroLang itself.
+// Guest is a booted std/compiler. Fresh std/*.nlc boots with vm_run only;
+// missing cache still loads std/compiler through the Go frontend.
 type Guest struct {
 	host *object.Environment
 }
@@ -46,16 +46,26 @@ func (g *Guest) BindScript(path string) {
 }
 
 func (g *Guest) NewEnv() object.Object {
-	return evalString(`copy(builtins())`, g.host)
+	return builtins["copy"].Fn(builtins["builtins"].Fn())
 }
 
 func (g *Guest) Eval(code string, env object.Object) object.Object {
-	g.host.Set("__src", &object.String{Value: code})
-	if env == nil || env == NULL {
-		return evalString(`C.nl_eval(__src, null)`, g.host)
+	c, ok := g.host.Get("C")
+	if !ok {
+		return newError("compiler not booted")
 	}
-	g.host.Set("__env", env)
-	return evalString(`C.nl_eval(__src, __env)`, g.host)
+	cm, ok := c.(*object.Map)
+	if !ok {
+		return newError("compiler is not a map")
+	}
+	fn := cm.Pairs["nl_eval"]
+	if fn == nil {
+		return newError("compiler is missing nl_eval")
+	}
+	if env == nil {
+		env = NULL
+	}
+	return applyFunction(fn, []object.Object{&object.String{Value: code}, env})
 }
 
 func evalString(code string, env *object.Environment) object.Object {

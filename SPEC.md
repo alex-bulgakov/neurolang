@@ -108,25 +108,20 @@ Core builtins:
 | `json parse_json type print load use` | host I/O and modules |
 | `vm_run vm_opcodes` | run a bytecode chunk `{code, consts, names}`; opcode name→int map |
 
-`use "std/lexer"` evaluates the file in a **fresh** environment and returns an export map (the last map value, or all top-level bindings). After `std/compiler` is booted, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile with `C.nl_parse`/`nl_compile` and write `.nlc`. The first load of `std/compiler` still uses the Go frontend. Paths resolve from CWD, the caller module directory, the repo root (`go.mod`), and the executable directory. `load("f.nl")` still injects bindings into the current env.
+`use "std/lexer"` evaluates the file in a **fresh** environment and returns an export map (the last map value, or all top-level bindings). After `std/compiler` is booted, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile with `C.nl_parse`/`nl_compile` and write `.nlc`. Missing or stale `std/*.nlc` still loads `std/compiler` through the Go frontend and rewrites the cache. Paths resolve from CWD, the caller module directory, the repo root (`go.mod`), and the executable directory. `load("f.nl")` still injects bindings into the current env.
 
 Tools (effects): `http.get` `http.post` `fs.list` `fs.read` `fs.write` `env.get` `time.now` `time.sleep`.
 
 ## 6. Self-hosting bootstrap
 
 ```
-Go host (stack VM)  --use-->  std/compiler.nl
-                                 |-- use lexer.nl
-                                 |-- use parser.nl
-                                 |-- use compile.nl
-                                     |
-                                     v
-              C.nl_eval = parse + compile + vm_run
+std/{lexer,parser,compile,compiler}.nlc  --vm_run-->  C.nl_eval
+missing/stale .nlc  --Go use-->  std/compiler.nl  --> write .nlc
 ```
 
 `C = use "std/compiler"` then `C.nl_eval(code, env)`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the guest eval path.
 
-`neurolang run` / `eval` / `repl` boot **`std/compiler`** then `C.nl_eval` on the VM. The Go lexer/parser remain only to load `std/compiler` when bytecode cache is missing or stale. `std/{lexer,parser,compile}.nlc` are guest-compiled chunks; a fresh cache boots with `vm_run` plus `compiler.nl` glue (the `use` lines stripped). After that, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
+`neurolang run` / `eval` / `repl` boot **`std/compiler`** then `C.nl_eval` on the VM. Fresh committed `std/{lexer,parser,compile,compiler}.nlc` boots with `vm_run` only (`compiler.nlc` runs with `L`/`P`/`K` already bound). The Go lexer/parser remain only to rebuild that cache when it is missing or stale. After that, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 
@@ -136,7 +131,7 @@ CLI:
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
-The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`; `vm_run` of the emitted lexer/parser/compile chunks tokenizes, parses, and compiles a program. User-facing `run` / `eval` / `repl` boot that stack from `std/*.nlc` when the cache is fresh; otherwise Go loads `std/compiler` and writes the cache. Subsequent `use`/`load` `vm_run` sibling `.nlc` when fresh, otherwise compile and write the cache. That is enough to grow the subset until the Go host is only a thin runtime.
+The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`; `vm_run` of the emitted lexer/parser/compile chunks tokenizes, parses, and compiles a program. User-facing `run` / `eval` / `repl` boot from committed `std/*.nlc` when the cache is fresh; otherwise Go loads `std/compiler` and writes the cache. Subsequent `use`/`load` `vm_run` sibling `.nlc` when fresh, otherwise compile and write the cache. That is enough to grow the subset until the Go host is only a thin runtime.
 
 ## 7. Generation rules for agents
 

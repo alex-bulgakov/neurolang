@@ -11,6 +11,7 @@ import (
 )
 
 var stdCacheNames = []string{"lexer", "parser", "compile"}
+var stdNlcNames = []string{"lexer", "parser", "compile", "compiler"}
 
 func stdDirPath() (string, error) {
 	resolved, err := ResolveModulePath("std/compiler", nil)
@@ -22,7 +23,7 @@ func stdDirPath() (string, error) {
 
 func cacheFresh(stdDir string) bool {
 	var newestSrc time.Time
-	for _, name := range append(stdCacheNames, "compiler") {
+	for _, name := range stdNlcNames {
 		st, err := os.Stat(filepath.Join(stdDir, name+".nl"))
 		if err != nil {
 			return false
@@ -32,7 +33,7 @@ func cacheFresh(stdDir string) bool {
 		}
 	}
 	var oldestNlc time.Time
-	for i, name := range stdCacheNames {
+	for i, name := range stdNlcNames {
 		st, err := os.Stat(filepath.Join(stdDir, name+".nlc"))
 		if err != nil {
 			return false
@@ -45,48 +46,34 @@ func cacheFresh(stdDir string) bool {
 }
 
 func bootFromCache(host *object.Environment, stdDir string) *Guest {
-	chunks := make([]object.Object, 0, 3)
-	for _, name := range stdCacheNames {
-		data, err := os.ReadFile(filepath.Join(stdDir, name+".nlc"))
-		if err != nil {
-			return nil
-		}
-		obj, err := decodeChunkJSON(data)
-		if err != nil {
-			return nil
-		}
-		chunks = append(chunks, obj)
-	}
-
 	prev := activeEnv
 	host.File = filepath.Join(stdDir, "compiler.nl")
 	host.Dir = stdDir
 	activeEnv = host
 	defer func() { activeEnv = prev }()
 
-	empty := &object.Map{Pairs: map[string]object.Object{}}
-	L := vmRun(chunks[0], empty)
-	if isError(L) {
-		return nil
+	parts := make([]object.Object, 0, 3)
+	for _, name := range stdCacheNames {
+		bc := readNlc(filepath.Join(stdDir, name+".nlc"))
+		if bc == nil {
+			return nil
+		}
+		v := vmRun(bc, &object.Map{Pairs: map[string]object.Object{}})
+		if isError(v) {
+			return nil
+		}
+		parts = append(parts, v)
 	}
-	P := vmRun(chunks[1], &object.Map{Pairs: map[string]object.Object{}})
-	if isError(P) {
-		return nil
-	}
-	K := vmRun(chunks[2], &object.Map{Pairs: map[string]object.Object{}})
-	if isError(K) {
-		return nil
-	}
-
+	L, P, K := parts[0], parts[1], parts[2]
 	host.Set("L", L)
 	host.Set("P", P)
 	host.Set("K", K)
 
-	src, err := os.ReadFile(filepath.Join(stdDir, "compiler.nl"))
-	if err != nil {
+	comp := readNlc(filepath.Join(stdDir, "compiler.nlc"))
+	if comp == nil {
 		return nil
 	}
-	v := evalString(stripStdUses(string(src)), host)
+	v := vmRun(comp, &object.Map{Pairs: map[string]object.Object{"L": L, "P": P, "K": K}})
 	if isError(v) {
 		return nil
 	}
@@ -126,12 +113,16 @@ func writeStdCache(host *object.Environment, stdDir string) {
 	if parse == nil || compile == nil {
 		return
 	}
-	for _, name := range stdCacheNames {
+	for _, name := range stdNlcNames {
 		data, err := os.ReadFile(filepath.Join(stdDir, name+".nl"))
 		if err != nil {
 			return
 		}
-		bc := compileModuleChunk(string(data))
+		src := string(data)
+		if name == "compiler" {
+			src = stripStdUses(src)
+		}
+		bc := compileModuleChunk(src)
 		if isError(bc) {
 			return
 		}
@@ -156,7 +147,11 @@ func loadFreshNlc(nlPath string) object.Object {
 	if stNlc.ModTime().Before(stSrc.ModTime()) {
 		return nil
 	}
-	data, err := os.ReadFile(nlc)
+	return readNlc(nlc)
+}
+
+func readNlc(path string) object.Object {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}

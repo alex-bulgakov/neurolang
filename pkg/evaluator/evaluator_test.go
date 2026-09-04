@@ -478,7 +478,7 @@ func TestStdBytecodeCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range stdCacheNames {
+	for _, name := range stdNlcNames {
 		_ = os.Remove(filepath.Join(stdDir, name+".nlc"))
 	}
 
@@ -486,7 +486,7 @@ func TestStdBytecodeCache(t *testing.T) {
 	if g == nil {
 		t.Fatalf("first BootGuest: %s", FormatErr(errObj))
 	}
-	for _, name := range stdCacheNames {
+	for _, name := range stdNlcNames {
 		if _, err := os.Stat(filepath.Join(stdDir, name+".nlc")); err != nil {
 			t.Fatalf("expected cache file %s.nlc: %v", name, err)
 		}
