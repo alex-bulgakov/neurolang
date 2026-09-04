@@ -57,8 +57,8 @@ match role { "admin" -> "H", _ -> "L" }
 ## Self-host
 Host is a stack VM. The compiler lives in `std/{lexer,parser,compile,compiler}.nl` and ships as `std/*.nlc` (`evaluator.nl` is a debug tree-walk).
 `C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`. Guest parse+compile of `std/{lexer,parser,compile,compiler}.nl` yields bytecode that runs on the VM.
-Last map in a module file is the export; otherwise all top-level names. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source, otherwise compile with `C.nl_parse`/`nl_compile` and write `.nlc`. Boot is `vm_run` of committed `std/*.nlc` (`compiler.nlc` gets `L`/`P`/`K`). Stale chunks are rebuilt by the guest compiler; missing stage-0 `.nlc` is a boot error.
-CLI: `neurolang run` / `eval` / `repl` boot `std/compiler` then `C.nl_eval` (`self` is an alias of `run`). `neurolang tools` / `neurolang mcp` expose the tool registry.
+Last map in a module file is the export; otherwise all top-level names. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source, otherwise compile with `C.nl_parse`/`nl_compile` and write `.nlc`. Boot `vm_run`s committed `std/*.nlc` (`compiler.nlc` is the full module; its `use` loads sibling `.nlc` before `C` exists). Stale chunks are rebuilt by the guest compiler; missing stage-0 `.nlc` is a boot error. Language tests: `tests/*.nl`. `neurolang check` runs them. New syntax desugars in `std/compile.nl`; new Go opcodes/builtins only when the VM cannot express the feature.
+CLI: `neurolang run` / `eval` / `repl` / `check` (`self` is an alias of `run`). `neurolang tools` / `neurolang mcp` expose the tool registry.
 Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation

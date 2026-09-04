@@ -499,11 +499,7 @@ func UseModule(path string, from *object.Environment) object.Object {
 	if err != nil {
 		return newError("use: %s", err.Error())
 	}
-	src := string(data)
-	if stdCompiler == nil {
-		return newError("use: std compiler is not booted")
-	}
-	return useViaStd(src, resolved)
+	return useViaStd(string(data), resolved)
 }
 
 func LoadInto(path string, env *object.Environment) object.Object {
@@ -515,11 +511,7 @@ func LoadInto(path string, env *object.Environment) object.Object {
 	if err != nil {
 		return newError("load error: %s", err.Error())
 	}
-	src := string(data)
-	if stdCompiler == nil {
-		return newError("load: std compiler is not booted")
-	}
-	return loadViaStd(src, resolved, env)
+	return loadViaStd(string(data), resolved, env)
 }
 
 func ErrMap(msg string, line, col int) *object.Map {

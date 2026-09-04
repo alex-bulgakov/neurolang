@@ -121,7 +121,7 @@ stale .nlc  --vm_run old chunks-->  guest nl_compile  --> write .nlc --> vm_run
 
 `C.nl_eval(code, env)` = parse + compile + `vm_run`. `env=null` => `copy(builtins())`. `C.nl_compile(ast)` emits `{code, consts, names}` for `vm_run`. Parse errors from the self-hosted parser are `{type:"Err", msg, line, col}`. Bytecode closures are `{__bc, code, consts, names, params}`. `std/evaluator.nl` is a tree-walk over AST maps for debugging; it is not the eval path. The Go host is only the stack VM.
 
-`neurolang run` / `eval` / `repl` boot from committed `std/{lexer,parser,compile,compiler}.nlc` (`compiler.nlc` runs with `L`/`P`/`K` already bound). If those files are older than the `.nl` sources, the guest compiler rewrites them. Missing stage-0 `.nlc` is a boot error. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
+`neurolang run` / `eval` / `repl` boot from committed `std/{lexer,parser,compile,compiler}.nlc`. `compiler.nlc` is the full module (`use` lexer/parser/compile); that `use` `vm_run`s sibling `.nlc` before `C` is bound. If `.nlc` are older than the `.nl` sources, the guest compiler rewrites them. Missing stage-0 `.nlc` is a boot error. Language tests live in `tests/*.nl`; `neurolang check` runs them. Grow the language by desugaring in `std/` onto existing opcodes; touch the Go VM only for a new opcode, builtin, or value kind. After boot, `use`/`load` `vm_run` a sibling `.nlc` when it is newer than the source; otherwise they compile and write `.nlc`. `neurolang self` is an alias of `run`. `!ident` is a tool call; write boolean not as `!(expr)` or `x == false`.
 
 CLI:
 
@@ -129,9 +129,10 @@ CLI:
 - `neurolang self file.nl` — alias of `run`
 - `neurolang tools` — compact `!tool` catalog for models
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
+- `neurolang check` — rebuild stale `std/*.nlc`, run `tests/*.nl`
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
-The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Tests run that corpus on `C.nl_eval`. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`. User-facing `run` / `eval` / `repl` boot from committed `std/*.nlc`; a stale cache is rebuilt by that guest compiler. Subsequent `use`/`load` `vm_run` sibling `.nlc` when fresh, otherwise compile and write the cache. The Go host is the VM, builtins, and tools.
+The self-hosted stack must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. That corpus lives in `tests/*.nl` and runs on `C.nl_eval`. Grow syntax in `std/` by desugaring to existing bytecode. The Go host is the VM, builtins, and tools.
 
 ## 7. Generation rules for agents
 

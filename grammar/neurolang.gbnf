@@ -1,5 +1,5 @@
 # Neurolang GBNF (llama.cpp / outlines constrained decoding)
-# Keep in lockstep with SPEC_AI.md (v0.4 use, v0.5 ??).
+# Keep in lockstep with SPEC_AI.md and std/parser.nl.
 
 root ::= program
 

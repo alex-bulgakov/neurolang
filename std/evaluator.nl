@@ -1,5 +1,6 @@
 # ==========================================================
-# std/evaluator.nl — meta-circular evaluator (compiler subset)
+# std/evaluator.nl — debug tree-walk over AST maps. Not used by
+# neurolang run / eval / repl (those are C.nl_eval → vm_run).
 # Closures are maps {__fn: true, params, body, env, dot}.
 # Control-flow signals: {__sig: "return"|"break"|"continue", val}
 # ==========================================================

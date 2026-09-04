@@ -1,5 +1,5 @@
 # ==========================================================
-# std/parser.nl — Pratt parser for the NeuroLang compiler subset
+# std/parser.nl — Pratt parser. Grammar: SPEC_AI.md (keep in lockstep).
 # ==========================================================
 
 precedences = {

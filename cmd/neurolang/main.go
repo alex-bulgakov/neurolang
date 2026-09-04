@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.17.0"
+const Version = "0.18.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -58,6 +58,9 @@ func main() {
 	case "spec":
 		printSpec()
 
+	case "check":
+		runCheck()
+
 	case "mcp":
 		mcp.Version = Version
 		if err := mcp.Serve(os.Stdin, os.Stdout); err != nil {
@@ -95,6 +98,7 @@ Usage:
   neurolang eval "<code>"     Evaluate a one-line expression
   neurolang repl              Launch interactive REPL session
   neurolang stats <file.nl>   Analyze token footprint and efficiency
+  neurolang check             Rebuild stale std/*.nlc and run tests/*.nl
   neurolang spec              Print the dense AI language spec
   neurolang tools             Compact tool catalog for models
   neurolang mcp               MCP stdio JSON-RPC (tools/list, tools/call)
@@ -116,6 +120,7 @@ AI Combinators & Syntax Overview:
 Examples:
   neurolang run examples/01_basics.nl
   neurolang eval "[1, 2, 3, 4] | ?(. > 2) | @(. * 10)"
+  neurolang check
   neurolang spec
 `, Version)
 }
@@ -127,6 +132,16 @@ func bootGuest() *evaluator.Guest {
 		os.Exit(1)
 	}
 	return g
+}
+
+func runCheck() {
+	g := bootGuest()
+	v := evaluator.RunLangTests(g)
+	if evaluator.IsErrMap(v) {
+		fmt.Fprintf(os.Stderr, "%s\n", evaluator.FormatErr(v))
+		os.Exit(1)
+	}
+	fmt.Println(v.Inspect())
 }
 
 func reportGuest(result object.Object, exitOnError bool) bool {

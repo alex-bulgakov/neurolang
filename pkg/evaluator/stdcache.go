@@ -54,7 +54,7 @@ func cacheFresh(stdDir string) bool {
 	return !oldestNlc.Before(newestSrc)
 }
 
-func bootFromCache(host *object.Environment, stdDir string) *Guest {
+func bootFromCache(host *object.Environment, stdDir string) (*Guest, object.Object) {
 	prev := activeEnv
 	host.File = filepath.Join(stdDir, "compiler.nl")
 	host.Dir = stdDir
@@ -65,11 +65,11 @@ func bootFromCache(host *object.Environment, stdDir string) *Guest {
 	for _, name := range stdCacheNames {
 		bc := readNlc(filepath.Join(stdDir, name+".nlc"))
 		if bc == nil {
-			return nil
+			return nil, newError("unreadable std/%s.nlc", name)
 		}
 		v := vmRun(bc, &object.Map{Pairs: map[string]object.Object{}})
 		if isError(v) {
-			return nil
+			return nil, v
 		}
 		parts = append(parts, v)
 	}
@@ -80,32 +80,23 @@ func bootFromCache(host *object.Environment, stdDir string) *Guest {
 
 	comp := readNlc(filepath.Join(stdDir, "compiler.nlc"))
 	if comp == nil {
-		return nil
+		return nil, newError("unreadable std/compiler.nlc")
 	}
-	v := vmRun(comp, &object.Map{Pairs: map[string]object.Object{"L": L, "P": P, "K": K}})
+	return guestFromCompilerChunk(host, comp, &object.Map{Pairs: map[string]object.Object{"L": L, "P": P, "K": K}})
+}
+
+func guestFromCompilerChunk(host *object.Environment, comp object.Object, env *object.Map) (*Guest, object.Object) {
+	v := vmRun(comp, env)
 	if isError(v) {
-		return nil
+		return nil, v
 	}
 	m, ok := v.(*object.Map)
-	if !ok {
-		return nil
+	if !ok || m.Pairs["nl_eval"] == nil || m.Pairs["nl_compile"] == nil {
+		return nil, newError("compiler.nlc did not export nl_eval/nl_compile")
 	}
 	host.Set("C", m)
 	rememberCompiler(m)
-	return &Guest{host: host}
-}
-
-func stripStdUses(src string) string {
-	lines := strings.Split(src, "\n")
-	out := make([]string, 0, len(lines))
-	for _, ln := range lines {
-		t := strings.TrimSpace(ln)
-		if strings.HasPrefix(t, "L = use ") || strings.HasPrefix(t, "P = use ") || strings.HasPrefix(t, "K = use ") {
-			continue
-		}
-		out = append(out, ln)
-	}
-	return strings.Join(out, "\n")
+	return &Guest{host: host}, nil
 }
 
 func writeStdCache(host *object.Environment, stdDir string) {
@@ -128,9 +119,6 @@ func writeStdCache(host *object.Environment, stdDir string) {
 			return
 		}
 		src := string(data)
-		if name == "compiler" {
-			src = stripStdUses(src)
-		}
 		bc := compileModuleChunk(src)
 		if isError(bc) {
 			return

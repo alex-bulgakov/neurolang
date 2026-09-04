@@ -1,7 +1,7 @@
 # ==========================================================
 # std/compiler.nl — self-hosted frontend: tokenize, parse, compile
-# Guest eval runs on the host stack VM (vm_run), not tree-walk.
-# std/evaluator.nl remains as an AST interpreter for debugging.
+# Boot vm_runs this module (and its use of lexer/parser/compile).
+# std/evaluator.nl is a debug AST interpreter, not the eval path.
 # ==========================================================
 
 L = use "lexer.nl"

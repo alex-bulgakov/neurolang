@@ -24,17 +24,22 @@ func BootGuest() (*Guest, object.Object) {
 		return nil, newError("missing std/*.nlc; stage-0 bytecode is required to boot")
 	}
 	host := object.NewEnvironment()
-	g := bootFromCache(host, stdDir)
+	g, errObj := bootFromCache(host, stdDir)
 	if g == nil {
-		return nil, newError("failed to boot from std/*.nlc")
+		if errObj == nil {
+			errObj = newError("failed to boot from std/*.nlc")
+		}
+		return nil, errObj
 	}
 	if !cacheFresh(stdDir) {
 		writeStdCache(g.host, stdDir)
 		if cacheFresh(stdDir) {
 			stdCompiler = nil
 			host2 := object.NewEnvironment()
-			if g2 := bootFromCache(host2, stdDir); g2 != nil {
+			if g2, err2 := bootFromCache(host2, stdDir); g2 != nil {
 				return g2, nil
+			} else if err2 != nil {
+				return g, nil
 			}
 		}
 	}
@@ -73,6 +78,9 @@ func (g *Guest) Eval(code string, env object.Object) object.Object {
 	if env == nil {
 		env = NULL
 	}
+	prev := activeEnv
+	activeEnv = g.host
+	defer func() { activeEnv = prev }()
 	return applyFunction(fn, []object.Object{&object.String{Value: code}, env})
 }
 
@@ -116,16 +124,16 @@ func loadViaStd(src, resolved string, env *object.Environment) object.Object {
 }
 
 func evalModule(src, resolved string, envMap *object.Map, cache bool) object.Object {
-	var bc object.Object
-	if filepath.Base(resolved) != "compiler.nl" {
-		bc = loadFreshNlc(resolved)
+	bc := loadFreshNlc(resolved)
+	if bc == nil && stdCompiler == nil {
+		bc = readNlc(nlcPath(resolved))
 	}
 	if bc == nil {
 		bc = compileModuleChunk(src)
 		if isError(bc) {
 			return bc
 		}
-		if cache && filepath.Base(resolved) != "compiler.nl" {
+		if cache {
 			writeNlc(resolved, bc)
 		}
 	}

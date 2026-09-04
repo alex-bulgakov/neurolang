@@ -1,5 +1,7 @@
 # ==========================================================
 # std/compile.nl — AST maps → bytecode for the host stack VM
+# Prefer desugar onto existing opcodes. Add a new OP only when the VM
+# cannot express the feature (new value kind, new control, new builtin).
 # Opcodes come from vm_opcodes() so they stay aligned with Go.
 # ==========================================================
 
