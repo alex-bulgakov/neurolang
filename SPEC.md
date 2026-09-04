@@ -136,7 +136,7 @@ CLI:
 - `neurolang mcp` — MCP stdio JSON-RPC (`initialize`, `tools/list`, `tools/call`)
 - `neurolang spec` — prints `SPEC_AI.md` (the dense primer for models)
 
-The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. That is enough to rewrite lexer/parser/compiler in NL and then grow the subset until the Go host is only a thin runtime.
+The self-hosted stack is a **compiler subset**: it must run pipelines, functions, `if`/`for`/`while`, maps, assignment, and tools. Host `Eval` and `C.nl_eval` are checked for parity on that corpus. The guest compiler must parse and compile `std/{lexer,parser,compile,compiler}.nl`; `vm_run` of the emitted lexer/parser/compile chunks tokenizes, parses, and compiles a program. `neurolang run` still uses the Go frontend (bootstrap). That is enough to grow the subset until the Go host is only a thin runtime.
 
 ## 7. Generation rules for agents
 

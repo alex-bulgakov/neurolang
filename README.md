@@ -132,7 +132,7 @@ neurolang/
 │   ├── token/                 # Определения токенов
 │   ├── tokenmetrics/          # BPE-счётчик токенов и метрики экономии контекста
 │   └── tools/                 # Реестр внешних инструментов и эффектов (MCP/HTTP/FS)
-├── std/                       # Self-hosted compiler (lexer/parser/eval на NL)
+├── std/                       # Self-hosted compiler (lexer/parser/compile на NL)
 ├── grammar/neurolang.gbnf     # GBNF для constrained decoding
 ├── SPEC_AI.md                 # Плотная спецификация для моделей
 ├── SPEC.md                    # Полная спецификация языка

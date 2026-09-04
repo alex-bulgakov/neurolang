@@ -411,6 +411,57 @@ par_ok = len(par_ast.statements) > 0 && par_ast.statements[0].type != "Err"
 	}
 }
 
+func TestDogfoodStdCompile(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	evaluated := testEval(`
+C = use "std/compiler"
+
+compile_file = path -> {
+  src = !fs.read(path)
+  ast = C.nl_parse(src)
+  if len(ast.statements) == 0 {
+    return {err: "empty", line: 0, col: 0}
+  }
+  if ast.statements[0].type == "Err" {
+    return ast.statements[0]
+  }
+  C.nl_compile(ast)
+}
+
+chunk_ok = bc -> type(bc) == "MAP" && len(bc.code) > 0
+
+lex_bc = compile_file("std/lexer.nl")
+par_bc = compile_file("std/parser.nl")
+cmp_bc = compile_file("std/compile.nl")
+front_bc = compile_file("std/compiler.nl")
+oks = [chunk_ok(lex_bc), chunk_ok(par_bc), chunk_ok(cmp_bc), chunk_ok(front_bc)]
+
+L = vm_run(lex_bc, copy(builtins()))
+P = vm_run(par_bc, copy(builtins()))
+K = vm_run(cmp_bc, copy(builtins()))
+toks = L.tokenize("acc = 1 + 2")
+ast = P.parse_program(toks)
+out = vm_run(K.compile_program(ast), copy(builtins()))
+[oks, out]
+`)
+	if isError(evaluated) {
+		t.Fatalf("dogfood compile failed: %s", evaluated.Inspect())
+	}
+	want := `[[true, true, true, true], 3]`
+	if evaluated.Inspect() != want {
+		t.Fatalf("dogfood compile mismatch:\nwant %s\ngot  %s", want, evaluated.Inspect())
+	}
+}
+
 func TestNLCompileVMRun(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()
