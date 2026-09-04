@@ -2,3 +2,6 @@
 *.test
 temp*
 .DS_Store
+git_token.txt
+*.token
+.env
