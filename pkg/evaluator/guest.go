@@ -18,9 +18,17 @@ type Guest struct {
 
 func BootGuest() (*Guest, object.Object) {
 	host := object.NewEnvironment()
+	if stdDir, err := stdDirPath(); err == nil && cacheFresh(stdDir) {
+		if g := bootFromCache(host, stdDir); g != nil {
+			return g, nil
+		}
+	}
 	v := evalString(`C = use "std/compiler"`, host)
 	if isError(v) {
 		return nil, v
+	}
+	if stdDir, err := stdDirPath(); err == nil {
+		writeStdCache(host, stdDir)
 	}
 	return &Guest{host: host}, nil
 }

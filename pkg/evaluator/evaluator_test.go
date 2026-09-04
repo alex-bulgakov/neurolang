@@ -462,6 +462,47 @@ out = vm_run(K.compile_program(ast), copy(builtins()))
 	}
 }
 
+func TestStdBytecodeCache(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	stdDir, err := stdDirPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range stdCacheNames {
+		_ = os.Remove(filepath.Join(stdDir, name+".nlc"))
+	}
+
+	g, errObj := BootGuest()
+	if g == nil {
+		t.Fatalf("first BootGuest: %s", FormatErr(errObj))
+	}
+	for _, name := range stdCacheNames {
+		if _, err := os.Stat(filepath.Join(stdDir, name+".nlc")); err != nil {
+			t.Fatalf("expected cache file %s.nlc: %v", name, err)
+		}
+	}
+
+	stdCompiler = nil
+	g2, errObj := BootGuest()
+	if g2 == nil {
+		t.Fatalf("cached BootGuest: %s", FormatErr(errObj))
+	}
+	v := g2.Eval("5 + 2 * 10", nil)
+	if isError(v) {
+		t.Fatalf("cached eval: %s", v.Inspect())
+	}
+	testIntegerObject(t, v, 25)
+}
+
 func TestGuestUseModule(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()

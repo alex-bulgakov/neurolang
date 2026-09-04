@@ -12,7 +12,7 @@ import (
 const protocolVersion = "2024-11-05"
 
 // Version is reported in initialize.serverInfo; set from the CLI.
-var Version = "0.12.0"
+var Version = "0.13.0"
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`

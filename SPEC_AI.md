@@ -57,8 +57,8 @@ match role { "admin" -> "H", _ -> "L" }
 ## Self-host
 Host is a stack VM. Compiler subset lives in `std/{lexer,parser,compile,compiler}.nl` (`evaluator.nl` is a debug tree-walk).
 `C = use "std/compiler"` then `C.nl_eval(code, env)` = parse + compile + `vm_run`. Host `Eval` and guest `nl_eval` agree on the language corpus. `env=null` => `copy(builtins())`. Guest parse+compile of `std/{lexer,parser,compile,compiler}.nl` yields bytecode that runs on the VM.
-Last map in a module file is the export; otherwise all top-level names. After `std/compiler` is booted, `use`/`load` compile the module with `C.nl_eval`; the first load of `std/compiler` is still Go.
-CLI: `neurolang run` / `eval` / `repl` boot `std/compiler` then `C.nl_eval` (`self` is an alias of `run`). Go lexer/parser remain only to load `std/compiler`. `neurolang tools` / `neurolang mcp` expose the tool registry.
+Last map in a module file is the export; otherwise all top-level names. After `std/compiler` is booted, `use`/`load` compile the module with `C.nl_eval`; the first load of `std/compiler` is still Go. Fresh `std/{lexer,parser,compile}.nlc` skips that Go load: `vm_run` the chunks and glue `compiler.nl` without the `use` lines.
+CLI: `neurolang run` / `eval` / `repl` boot `std/compiler` then `C.nl_eval` (`self` is an alias of `run`). Fresh `std/*.nlc` skips the Go load. `neurolang tools` / `neurolang mcp` expose the tool registry.
 Parse errors are `{type:"Err", msg, line, col}`. `!ident` is always a tool; boolean not uses `!(expr)` or `x == false`.
 
 ## Style for generation

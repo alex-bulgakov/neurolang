@@ -5,3 +5,4 @@ temp*
 git_token.txt
 *.token
 .env
+std/*.nlc
