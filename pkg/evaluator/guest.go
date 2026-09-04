@@ -10,16 +10,28 @@ import (
 // Later use/load run sibling .nlc or compile with C.nl_parse/nl_compile.
 var stdCompiler *object.Map
 
-// Guest is a booted std/compiler. Fresh std/*.nlc boots with vm_run only;
-// missing cache still loads std/compiler through the Go frontend.
+// Guest is a booted std/compiler. Existing std/*.nlc boot with vm_run;
+// stale chunks are rebuilt by the guest compiler. Go loads std/compiler
+// only when the cache files are missing.
 type Guest struct {
 	host *object.Environment
 }
 
 func BootGuest() (*Guest, object.Object) {
 	host := object.NewEnvironment()
-	if stdDir, err := stdDirPath(); err == nil && cacheFresh(stdDir) {
+	stdDir, err := stdDirPath()
+	if err == nil && cachePresent(stdDir) {
 		if g := bootFromCache(host, stdDir); g != nil {
+			if !cacheFresh(stdDir) {
+				writeStdCache(g.host, stdDir)
+				if cacheFresh(stdDir) {
+					stdCompiler = nil
+					host2 := object.NewEnvironment()
+					if g2 := bootFromCache(host2, stdDir); g2 != nil {
+						return g2, nil
+					}
+				}
+			}
 			return g, nil
 		}
 	}
@@ -27,7 +39,7 @@ func BootGuest() (*Guest, object.Object) {
 	if isError(v) {
 		return nil, v
 	}
-	if stdDir, err := stdDirPath(); err == nil {
+	if err == nil {
 		writeStdCache(host, stdDir)
 	}
 	return &Guest{host: host}, nil

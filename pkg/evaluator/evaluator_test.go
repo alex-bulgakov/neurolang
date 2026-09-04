@@ -548,6 +548,55 @@ L.tokenize("a = 1")[0].type
 	testIntegerObject(t, got, 42)
 }
 
+func TestStaleNlcRebuildViaGuest(t *testing.T) {
+	root := repoRoot(t)
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+
+	stdDir, err := stdDirPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, errObj := BootGuest()
+	if g == nil {
+		t.Fatalf("seed BootGuest: %s", FormatErr(errObj))
+	}
+
+	nl := filepath.Join(stdDir, "lexer.nl")
+	nlc := filepath.Join(stdDir, "lexer.nlc")
+	stSrc, err := os.Stat(nl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	older := stSrc.ModTime().Add(-3 * time.Second)
+	if err := os.Chtimes(nlc, older, older); err != nil {
+		t.Fatal(err)
+	}
+	if cacheFresh(stdDir) {
+		t.Fatal("expected stale cache after backdating lexer.nlc")
+	}
+
+	stdCompiler = nil
+	g2, errObj := BootGuest()
+	if g2 == nil {
+		t.Fatalf("stale BootGuest: %s", FormatErr(errObj))
+	}
+	v := g2.Eval("5 + 2 * 10", nil)
+	if isError(v) {
+		t.Fatalf("rebuilt eval: %s", v.Inspect())
+	}
+	testIntegerObject(t, v, 25)
+	if !cacheFresh(stdDir) {
+		t.Fatal("expected guest rebuild to refresh std/*.nlc")
+	}
+}
+
 func TestGuestUseModule(t *testing.T) {
 	root := repoRoot(t)
 	old, err := os.Getwd()

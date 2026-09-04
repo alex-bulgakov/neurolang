@@ -21,6 +21,15 @@ func stdDirPath() (string, error) {
 	return filepath.Dir(resolved), nil
 }
 
+func cachePresent(stdDir string) bool {
+	for _, name := range stdNlcNames {
+		if _, err := os.Stat(filepath.Join(stdDir, name+".nlc")); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func cacheFresh(stdDir string) bool {
 	var newestSrc time.Time
 	for _, name := range stdNlcNames {
